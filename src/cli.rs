@@ -26,12 +26,46 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Merge configuration layers and create/update the dev-box environment.
+    #[command(alias = "create")]
     Up {
         #[arg(long)]
         dry_run: bool,
+        /// On Windows, prepare a high-speed WSL2 ext4 scratchpad workspace.
+        #[arg(long)]
+        scratchpad: bool,
     },
     /// Enter an already-created dev-box environment.
-    Enter { name: Option<String> },
+    Enter {
+        name: Option<String>,
+        /// On Windows, enter inside the high-speed WSL2 ext4 scratchpad workspace.
+        #[arg(long)]
+        scratchpad: bool,
+    },
+    /// Synchronize project files between Windows host and WSL2 ext4 scratchpad.
+    Sync {
+        /// Name of the box (defaults to [dev-environment] name from config).
+        name: Option<String>,
+        /// Reverse sync: pull changes from WSL scratchpad back to Windows host.
+        #[arg(short, long)]
+        reverse: bool,
+    },
+    /// List all existing dev-box / distrobox containers.
+    #[command(alias = "ls")]
+    List,
+    /// Stop a running dev-box environment.
+    Stop {
+        /// Name of the box to stop (defaults to [dev-environment] name from config).
+        name: Option<String>,
+    },
+    /// Remove a dev-box environment.
+    #[command(alias = "delete")]
+    Rm {
+        /// Name of the box to remove (defaults to [dev-environment] name from config).
+        name: Option<String>,
+        /// Force removal without confirmation prompt.
+        #[arg(short, long)]
+        force: bool,
+    },
     /// Print the merged configuration without doing anything else.
     Config,
     /// Internal: runs sshd in inetd mode inside a box, speaking raw SSH

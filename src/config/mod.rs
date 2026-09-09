@@ -102,3 +102,12 @@ pub fn forwarded_env_from(ini: &Ini) -> Vec<(String, String)> {
     }
     forwarded
 }
+
+/// Returns `true` if `[dev-environment] scratchpad = true` is declared in the config.
+pub fn is_scratchpad_enabled(ini: &Ini) -> bool {
+    ini.get_from(Some("dev-environment"), "scratchpad")
+        .map(util::unquote)
+        .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+        .unwrap_or(false)
+}
+

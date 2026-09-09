@@ -43,6 +43,7 @@ pub struct DevBoxHandler {
     pub engine: Arc<dyn ContainerEngine>,
     pub box_name: Arc<str>,
     pub forwarded_env: Vec<(String, String)>,
+    pub work_dir: Option<String>,
     pub children: HashMap<ChannelId, ChildState>,
 }
 
@@ -161,9 +162,12 @@ impl Handler for DevBoxHandler {
         channel: ChannelId,
         session: &mut Session,
     ) -> Result<(), Self::Error> {
-        let script = self
-            .engine
-            .enter_script(&self.box_name, None, &self.forwarded_env);
+        let script = self.engine.enter_script(
+            &self.box_name,
+            None,
+            &self.forwarded_env,
+            self.work_dir.as_deref(),
+        );
         self.spawn_child(channel, &script, session)?;
         session.channel_success(channel)?;
         Ok(())
@@ -176,9 +180,12 @@ impl Handler for DevBoxHandler {
         session: &mut Session,
     ) -> Result<(), Self::Error> {
         let command = String::from_utf8_lossy(data).into_owned();
-        let script = self
-            .engine
-            .enter_script(&self.box_name, Some(&command), &self.forwarded_env);
+        let script = self.engine.enter_script(
+            &self.box_name,
+            Some(&command),
+            &self.forwarded_env,
+            self.work_dir.as_deref(),
+        );
         self.spawn_child(channel, &script, session)?;
         session.channel_success(channel)?;
         Ok(())

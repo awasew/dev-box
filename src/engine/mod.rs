@@ -20,12 +20,13 @@ pub trait ContainerEngine {
     /// Enters an already-assembled environment interactively, forwarding
     /// `forwarded_env` (name, value) pairs into the box's session (e.g.
     /// AI agent API keys read from the host shell -- see
-    /// `config::forwarded_env_from`).
+    /// `config::forwarded_env_from`), optionally changing into `work_dir`.
     fn enter(
         &self,
         host: &dyn HostTransport,
         box_name: &str,
         forwarded_env: &[(String, String)],
+        work_dir: Option<&str>,
     ) -> Result<()>;
 
     /// Builds the shell script used to enter the box for a piped SSH
@@ -41,5 +42,15 @@ pub trait ContainerEngine {
         box_name: &str,
         command: Option<&str>,
         forwarded_env: &[(String, String)],
+        work_dir: Option<&str>,
     ) -> String;
+
+    /// Lists all existing container environments.
+    fn list(&self, host: &dyn HostTransport) -> Result<()>;
+
+    /// Stops a running container environment.
+    fn stop(&self, host: &dyn HostTransport, box_name: &str) -> Result<()>;
+
+    /// Removes a container environment.
+    fn rm(&self, host: &dyn HostTransport, box_name: &str, force: bool) -> Result<()>;
 }

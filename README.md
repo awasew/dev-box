@@ -9,6 +9,7 @@ Unlike VS Code's Dev Containers, dev-box doesn't lock you into a specific editor
 - **IDE-independent** — no proprietary extension or vendor lock-in. Use Neovim, VS Code, JetBrains, Emacs, or a plain terminal.
 - **Cross-platform** — the same config works on Linux, macOS, and Windows. dev-box abstracts away *how* each host reaches the underlying Linux container layer.
 - **Layered configuration** — cascade settings from system defaults, to your personal preferences, to the project, to local overrides — without editing a single shared file or fighting Git merge conflicts.
+- **100% native I/O speed (Scratchpad Sync)** — bypass the slow Windows 9P (`/mnt/c/`) and macOS VirtioFS filesystem penalties. Code is edited natively on the host while builds compile in native ext4 RAM/disk, without burying files inside opaque Docker volumes.
 - **Zero bloat** — dev-box doesn't reinvent container runtimes. It's a thin, sub-millisecond-startup control plane over Distrobox and Podman/Docker, so it stays a tiny (~2MB) static binary.
 - **No SSH keys at all** — dev-box embeds its own tiny SSH server directly in the binary. `dev-box up` wires up your local SSH client; nothing is ever installed, generated, or modified inside the box, and no host or user key ever exists anywhere.
 
@@ -95,30 +96,86 @@ dev-box is a thin orchestration layer over Distrobox, so it inherits Distrobox's
 
   Note: forwarded values must not contain literal spaces (a safe assumption for API keys/tokens), and -- since this passes through several process command lines -- they're visible to `ps` on your own machine for the moment the command runs, same as writing `MY_VAR=secret some-command` directly in a shell.
 
+## Fast filesystem performance: Scratchpad Sync (Windows & macOS)
+
+When developing inside Linux containers on Windows (WSL2) or macOS (Podman Machine/Lima), compiling files stored on the host filesystem (`C:\...` via 9P or `/Users/...` via VirtioFS) introduces a **5x to 20x cross-boundary I/O penalty**.
+
+Standard Dev Containers solve this by burying code inside opaque Docker Named Volumes, which locks files away from native Windows/Mac tools.
+
+**dev-box provides the best of both worlds with built-in Scratchpad Sync**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    HOST FILESYSTEM (C:\ or /Users)          │
+│  Project Source Files (Edited natively with your tools)     │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+            Differential Sync (native WSL / VM rsync)
+            Sub-millisecond latency across boundary
+                               │
+┌──────────────────────────────▼──────────────────────────────┐
+│                NATIVE LINUX EXT4 RAM/RAMDISK                │
+│  `/tmp/dev-box/scratchpads/<box_name>/`                     │
+│  • Primary workspace for Distrobox container                │
+│  • Compiles at NATIVE 100% Linux ext4 speed                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- **Source files stay on your host**: Use Windows Git tools, host linters, and native editors without network protocols.
+- **100% native ext4 compilation**: Builds (`cargo build`, `npm install`) run entirely inside the VM's native ext4 storage.
+- **Automatic `.gitignore` & artifact isolation**: Heavy directories (`target/`, `node_modules/`, `.git/`) stay in Linux and never cross the slow bridge.
+- **Auto-sync on exit**: Modified source files (e.g. `Cargo.lock`, code generators) automatically sync back to the host when you exit your session.
+- **Enable via CLI or config**: Run `dev-box enter --scratchpad` or add `scratchpad = true` to `devbox.ini`. Manual sync is available via `dev-box sync` and `dev-box sync --reverse`.
+
+See the [Filesystem Performance Guide](docs/filesystem-performance.md) for full benchmarks and architecture details.
+
 ## Usage
 
 ```sh
 # Create/update the environment from the merged configuration,
-# and configure keyless SSH access to it in one step
+# and configure keyless SSH access to it in one step (alias: `dev-box create`)
 dev-box up
 
 # Preview the merged configuration without touching any containers
 dev-box up --dry-run
 
-# Print the merged configuration only
-dev-box config
+# List existing dev-box / distrobox containers (alias: `dev-box ls`)
+dev-box list
 
 # Enter an assembled environment directly (uses [dev-environment] name= by default)
 dev-box enter
 dev-box enter my-other-box
 
+# On Windows: enter inside a high-speed native WSL2 ext4 scratchpad (100% Linux compilation speed)
+dev-box enter --scratchpad
+
+# Synchronize files between host and WSL2 scratchpad on Windows
+dev-box sync            # push host changes to WSL scratchpad
+dev-box sync --reverse  # pull scratchpad changes back to host
+
+# Stop an environment (uses [dev-environment] name= by default)
+dev-box stop
+dev-box stop my-other-box
+
+# Remove an environment and clean up its SSH configuration and scratchpad (alias: `dev-box delete`)
+dev-box rm
+dev-box rm --force my-other-box
+
+# Print the merged configuration only
+dev-box config
+
 # Or just use plain ssh -- dev-box already wired up ~/.ssh/config for you
 ssh my-project-dev
 ```
 
-Any Remote-SSH-capable IDE (VS Code, JetBrains Gateway, ...) can connect to `my-project-dev` as soon as `dev-box up` has run once — no extension, no manual key setup, no host to configure.
+Any Remote-SSH-capable IDE (VS Code, Cursor, JetBrains Gateway, Zed, ...) can connect to `my-project-dev` as soon as `dev-box up` has run once — no extension, no manual key setup, no host to configure. See [IDE Integration Guide](docs/ide-integration.md) for step-by-step connection instructions.
 
 > `dev-box ssh-proxy` is a hidden subcommand used internally as the generated `ProxyCommand`. You should never need to run it by hand.
+
+## Detailed Documentation
+
+- **[IDE Integration & Keyless SSH Guide](docs/ide-integration.md)** — Complete setup for VS Code, Cursor, JetBrains Gateway, Zed, and Neovim; port forwarding; and zero-credential authentication mechanics.
+- **[Filesystem Performance & Scratchpad Sync Guide](docs/filesystem-performance.md)** — In-depth analysis of Windows 9P vs macOS VirtioFS vs Linux native ext4, why Docker volumes fall short, and how the `dev-box` Scratchpad Sync layer delivers 100% Linux compilation speed.
 
 ## Requirements
 
@@ -128,7 +185,7 @@ Any Remote-SSH-capable IDE (VS Code, JetBrains Gateway, ...) can connect to `my-
   - **Windows**: installed inside [WSL2](https://learn.microsoft.com/windows/wsl/).
 - The OpenSSH **client** (just `ssh`, no server) on the host, to actually connect. This ships by default on Linux and macOS, and as an optional Windows feature (already required by any Remote-SSH IDE workflow).
 
-> **Windows Performance Note**: When using dev-box on Windows, avoid running on projects stored on the Windows NTFS drive (`/mnt/c/...`). Keep project repositories inside the WSL2 native filesystem (`/home/...`) for up to 20x faster file I/O. See [Filesystem Performance Guide](docs/filesystem-performance.md) for a detailed technical breakdown, Dev Container comparisons, and best practices.
+> **Filesystem Performance Note**: Developing on Windows NTFS (`C:\...`) or macOS APFS across VM boundaries can slow down heavy builds (`cargo build`, `npm install`). Use `dev-box enter --scratchpad` or set `scratchpad = true` in `devbox.ini` to run in native ext4 RAM/disk. See [Filesystem Performance Guide](docs/filesystem-performance.md) for full details.
 
 
 ## Installing

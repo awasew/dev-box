@@ -41,12 +41,13 @@ pub fn run(
     box_name: String,
     forwarded_env: Vec<(String, String)>,
     engine: Arc<dyn ContainerEngine>,
+    work_dir: Option<String>,
 ) -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .context("failed to start the async runtime for ssh-proxy")?;
-    rt.block_on(serve(host, box_name, forwarded_env, engine))
+    rt.block_on(serve(host, box_name, forwarded_env, engine, work_dir))
 }
 
 async fn serve(
@@ -54,6 +55,7 @@ async fn serve(
     box_name: String,
     forwarded_env: Vec<(String, String)>,
     engine: Arc<dyn ContainerEngine>,
+    work_dir: Option<String>,
 ) -> Result<()> {
     // A fresh, in-memory-only host key. It's never written to disk and
     // never needs to be trusted by the client (`StrictHostKeyChecking
@@ -72,6 +74,7 @@ async fn serve(
         engine,
         box_name: Arc::from(box_name.as_str()),
         forwarded_env,
+        work_dir,
         children: HashMap::new(),
     };
 
@@ -200,3 +203,56 @@ fn upsert_host_block(path: &Path, box_name: &str, layers: &[PathBuf]) -> Result<
     fs::write(path, new_content).with_context(|| format!("failed to update {}", path.display()))?;
     Ok(())
 }
+
+/// Removes the managed SSH client config block for `box_name` from
+/// `~/.ssh/dev-box_config` when the box is deleted.
+pub fn remove_client_config(box_name: &str) -> Result<()> {
+    let ssh_dir = match dirs::home_dir() {
+        Some(h) => h.join(".ssh"),
+        None => return Ok(()),
+    };
+    let config_path = ssh_dir.join("dev-box_config");
+    if !config_path.exists() {
+        return Ok(());
+    }
+    remove_host_block(&config_path, box_name)?;
+    Ok(())
+}
+
+/// Removes the marker-delimited `Host` block for `box_name` from the config file,
+/// leaving all other host entries intact.
+fn remove_host_block(path: &Path, box_name: &str) -> Result<()> {
+    let begin = format!("{BEGIN_MARKER_PREFIX} {box_name} >>>");
+    let end = format!("{END_MARKER_PREFIX} {box_name} <<<");
+
+    let existing = fs::read_to_string(path).unwrap_or_default();
+    let lines: Vec<&str> = existing.lines().collect();
+
+    let existing_block = lines
+        .iter()
+        .position(|l| l.trim() == begin)
+        .and_then(|start| {
+            lines[start..]
+                .iter()
+                .position(|l| l.trim() == end)
+                .map(|offset| (start, start + offset))
+        });
+
+    if let Some((start, end_idx)) = existing_block {
+        let mut new_content = String::new();
+        if start > 0 {
+            new_content.push_str(&lines[..start].join("\n"));
+            new_content.push('\n');
+        }
+        let rest = &lines[end_idx + 1..];
+        if !rest.is_empty() {
+            new_content.push_str(&rest.join("\n"));
+            new_content.push('\n');
+        }
+        fs::write(path, new_content)
+            .with_context(|| format!("failed to update {}", path.display()))?;
+    }
+
+    Ok(())
+}
+

@@ -42,8 +42,9 @@ impl ContainerEngine for DistroboxEngine {
         host: &dyn HostTransport,
         box_name: &str,
         forwarded_env: &[(String, String)],
+        work_dir: Option<&str>,
     ) -> Result<()> {
-        let script = self.enter_script(box_name, None, forwarded_env);
+        let script = self.enter_script(box_name, None, forwarded_env, work_dir);
         let status = host.run(&script, None)?;
         if !status.success() {
             bail!("distrobox enter failed with status: {status}");
@@ -56,8 +57,13 @@ impl ContainerEngine for DistroboxEngine {
         box_name: &str,
         command: Option<&str>,
         forwarded_env: &[(String, String)],
+        work_dir: Option<&str>,
     ) -> String {
-        let mut script = format!("distrobox enter {}", shell_quote(box_name));
+        let mut script = String::new();
+        if let Some(dir) = work_dir {
+            script.push_str(&format!("cd {} && ", shell_quote(dir)));
+        }
+        script.push_str(&format!("distrobox enter {}", shell_quote(box_name)));
 
         if !forwarded_env.is_empty() {
             let mut flags = String::new();
@@ -80,5 +86,50 @@ impl ContainerEngine for DistroboxEngine {
         }
 
         script
+    }
+
+    fn list(&self, host: &dyn HostTransport) -> Result<()> {
+        if !self.is_available(host) {
+            bail!(
+                "distrobox was not found on {}. Install it and try again: https://distrobox.it",
+                host.name()
+            );
+        }
+        let status = host.run("distrobox list", None)?;
+        if !status.success() {
+            bail!("distrobox list failed with status: {status}");
+        }
+        Ok(())
+    }
+
+    fn stop(&self, host: &dyn HostTransport, box_name: &str) -> Result<()> {
+        if !self.is_available(host) {
+            bail!(
+                "distrobox was not found on {}. Install it and try again: https://distrobox.it",
+                host.name()
+            );
+        }
+        let script = format!("distrobox stop -Y {}", shell_quote(box_name));
+        let status = host.run(&script, None)?;
+        if !status.success() {
+            bail!("distrobox stop failed with status: {status}");
+        }
+        Ok(())
+    }
+
+    fn rm(&self, host: &dyn HostTransport, box_name: &str, force: bool) -> Result<()> {
+        if !self.is_available(host) {
+            bail!(
+                "distrobox was not found on {}. Install it and try again: https://distrobox.it",
+                host.name()
+            );
+        }
+        let flag = if force { " -f" } else { "" };
+        let script = format!("distrobox rm{flag} {}", shell_quote(box_name));
+        let status = host.run(&script, None)?;
+        if !status.success() {
+            bail!("distrobox rm failed with status: {status}");
+        }
+        Ok(())
     }
 }

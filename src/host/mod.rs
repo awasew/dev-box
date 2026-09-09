@@ -1,5 +1,6 @@
 pub mod linux;
 pub mod macos;
+pub mod scratchpad;
 pub mod windows;
 
 use anyhow::{Context, Result};
