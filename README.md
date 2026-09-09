@@ -128,6 +128,9 @@ Any Remote-SSH-capable IDE (VS Code, JetBrains Gateway, ...) can connect to `my-
   - **Windows**: installed inside [WSL2](https://learn.microsoft.com/windows/wsl/).
 - The OpenSSH **client** (just `ssh`, no server) on the host, to actually connect. This ships by default on Linux and macOS, and as an optional Windows feature (already required by any Remote-SSH IDE workflow).
 
+> **Windows Performance Note**: When using dev-box on Windows, avoid running on projects stored on the Windows NTFS drive (`/mnt/c/...`). Keep project repositories inside the WSL2 native filesystem (`/home/...`) for up to 20x faster file I/O. See [Filesystem Performance Guide](docs/filesystem-performance.md) for a detailed technical breakdown, Dev Container comparisons, and best practices.
+
+
 ## Installing
 
 Pre-built binaries for Linux, macOS, and Windows are published on the [GitHub Releases](../../releases) page for every tagged version. Download the binary for your platform and put it on your `PATH`.
