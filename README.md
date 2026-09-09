@@ -24,22 +24,48 @@ Unlike VS Code's Dev Containers, dev-box doesn't lock you into a specific editor
 
 ```mermaid
 flowchart TD
-    A[Config layers merged in RAM] --> B[dev-box engine]
-    B --> C[HostTransport]
-    C --> D1[Linux: native shell]
-    C --> D2[macOS: Podman Machine / Lima]
-    C --> D3[Windows: WSL2]
-    D1 --> E[ContainerEngine]
-    D2 --> E
-    D3 --> E
-    E --> F[Distrobox]
-    F --> G[Podman / Docker]
+    subgraph Config ["Configuration Layer (RAM)"]
+        C1["~/.config/dev-box/global.ini"] --> CM["In-Memory Merge"]
+        C2["./devbox.ini"] --> CM
+        C3["./devbox.local.ini"] --> CM
+    end
+
+    subgraph Core ["dev-box Control Plane"]
+        CM --> APP["AppContext (Config + Secrets)"]
+        APP --> ENG["ContainerEngine (Distrobox)"]
+        APP --> SSH["Embedded SSH Server (russh)"]
+    end
+
+    subgraph Access ["Developer / IDE Access"]
+        IDE["IDE / SSH Client (VS Code, Cursor, Zed)"] <== "ProxyCommand (stdio)" ==> SSH
+    end
+
+    subgraph Sync ["Filesystem Sync Layer"]
+        HOST_FS["Host Source Files (C:\ or /Users)"] <== "rsync differential sync" ==> EXT4["WSL2 / VM ext4 Scratchpad (/tmp/...)"]
+    end
+
+    subgraph Execution ["Platform Execution (HostTransport)"]
+        ENG --> TR["HostTransport"]
+        SSH --> TR
+        TR --> H1["Linux: Native Shell"]
+        TR --> H2["macOS: Podman Machine / Lima"]
+        TR --> H3["Windows: WSL2"]
+    end
+
+    subgraph Container ["Container Layer"]
+        H1 --> DBX["Distrobox"]
+        H2 --> DBX
+        H3 --> DBX
+        EXT4 -.->|"Workdir"| DBX
+        DBX --> RUNTIME["Podman / Docker"]
+    end
 ```
 
-- **Config engine** (`src/config`): merges N INI layers in memory. Scalar keys (like `image`) are overwritten by later layers; additive keys (`additional_packages`, `init_hooks`, `exported_apps`) are combined across layers.
-- **HostTransport** (`src/host`): abstracts *how* dev-box reaches the Linux layer that runs Distrobox — native shell on Linux, `wsl.exe` on Windows, `podman machine ssh` / `limactl` on macOS.
-- **ContainerEngine** (`src/engine`): abstracts the container backend. Only `DistroboxEngine` exists today, but the trait leaves room for alternative backends later.
-- **Embedded SSH server** (`src/sshd`): a minimal SSH server built into the `dev-box` binary itself, plus the local `~/.ssh/config` entry that makes `ssh <box-name>` (and any IDE built on top of it) just work.
+- **Config engine** (`src/config`): merges N INI layers in memory. Scalar keys (like `image`) are overwritten by later layers; additive keys (`additional_packages`, `init_hooks`, `exported_apps`, `forward_env`) are combined across layers.
+- **HostTransport** (`src/host`): abstracts *how* dev-box reaches the Linux layer that runs Distrobox — native shell on Linux, `wsl.exe` on Windows, and `podman machine ssh` / `limactl` on macOS.
+- **ContainerEngine** (`src/engine`): drives container lifecycle (`assemble`, `enter`, `list`, `stop`, `rm`) using `HostTransport` as its execution bridge.
+- **Embedded SSH server** (`src/sshd`): an embedded SSH server built into the binary that speaks the SSH protocol directly over stdio (via `ProxyCommand`), providing keyless, zero-credential access to any IDE without network ports or daemon bloat.
+- **Scratchpad Sync** (`src/host/scratchpad.rs`): differentially syncs project files between host storage (`C:\` or `/Users`) and a high-speed native ext4 RAM/disk workspace to eliminate cross-filesystem I/O penalties.
 
 ### How the keyless SSH connection actually works
 
