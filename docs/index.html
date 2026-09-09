@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dev-box - IDE-Independent Developer Environments</title>
+    <meta name="description" content="Lightweight, cross-platform developer environments with keyless SSH and native filesystem performance.">
+    <meta name="keywords" content="dev-containers, distrobox, rust, developer-tools, ssh, cross-platform">
+    <meta name="og:title" content="dev-box - Break Free from VS Code Dev Containers">
+    <meta name="og:description" content="IDE-independent dev environments without vendor lock-in. Keyless SSH. 5-10x faster builds.">
+    <meta name="og:image" content="https://raw.githubusercontent.com/srikanthrayudu/dev-box/main/docs/images/hero.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        header .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        header .logo {
+            font-size: 24px;
+            font-weight: bold;
+            letter-spacing: -1px;
+        }
+
+        header nav a {
+            color: white;
+            text-decoration: none;
+            margin-left: 30px;
+            font-size: 14px;
+            transition: opacity 0.3s;
+        }
+
+        header nav a:hover {
+            opacity: 0.8;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .hero {
+            padding: 80px 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        .hero p {
+            font-size: 20px;
+            margin-bottom: 30px;
+            opacity: 0.95;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-primary {
+            background: white;
+            color: #667eea;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: white;
+            border: 2px solid white;
+        }
+
+        .btn-secondary:hover {
+            background: white;
+            color: #667eea;
+        }
+
+        .features {
+            padding: 80px 0;
+            background: #f8f9fa;
+        }
+
+        .features h2 {
+            text-align: center;
+            font-size: 36px;
+            margin-bottom: 50px;
+            color: #333;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .feature-card h3 {
+            font-size: 20px;
+            margin-bottom: 12px;
+            color: #667eea;
+        }
+
+        .feature-card p {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.8;
+        }
+
+        .comparison {
+            padding: 80px 0;
+            background: white;
+        }
+
+        .comparison h2 {
+            text-align: center;
+            font-size: 36px;
+            margin-bottom: 50px;
+            color: #333;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 15px 20px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        .comparison-table th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+
+        .comparison-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .comparison-table .check {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .comparison-table .cross {
+            color: #dc3545;
+        }
+
+        .quickstart {
+            padding: 80px 0;
+            background: #f8f9fa;
+        }
+
+        .quickstart h2 {
+            text-align: center;
+            font-size: 36px;
+            margin-bottom: 50px;
+            color: #333;
+        }
+
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin-bottom: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .code-block .comment {
+            color: #75715e;
+        }
+
+        .testimonials {
+            padding: 80px 0;
+            background: white;
+        }
+
+        .testimonials h2 {
+            text-align: center;
+            font-size: 36px;
+            margin-bottom: 50px;
+            color: #333;
+        }
+
+        .testimonial-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+        }
+
+        .testimonial-card {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .testimonial-text {
+            font-style: italic;
+            margin-bottom: 15px;
+            color: #666;
+        }
+
+        .testimonial-author {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .stats {
+            padding: 80px 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 40px;
+            margin-top: 40px;
+        }
+
+        .stat {
+            font-size: 14px;
+        }
+
+        .stat-number {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .community {
+            padding: 80px 0;
+            background: #f8f9fa;
+            text-align: center;
+        }
+
+        .community h2 {
+            font-size: 36px;
+            margin-bottom: 30px;
+            color: #333;
+        }
+
+        .community p {
+            font-size: 18px;
+            margin-bottom: 40px;
+            color: #666;
+        }
+
+        .social-links {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .social-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background: white;
+            color: #667eea;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            border: 2px solid #667eea;
+            transition: all 0.3s;
+        }
+
+        .social-link:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        footer {
+            background: #2d2d2d;
+            color: white;
+            text-align: center;
+            padding: 40px 0;
+            font-size: 14px;
+        }
+
+        footer p {
+            margin-bottom: 10px;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .footer-links a {
+            color: #999;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .footer-links a:hover {
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 32px;
+            }
+
+            .hero p {
+                font-size: 16px;
+            }
+
+            header nav {
+                display: none;
+            }
+
+            .features h2, .comparison h2, .quickstart h2, .testimonials h2, .community h2 {
+                font-size: 28px;
+            }
+
+            .comparison-table {
+                font-size: 12px;
+            }
+
+            .comparison-table th, .comparison-table td {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">🐚 dev-box</div>
+            <nav>
+                <a href="#features">Features</a>
+                <a href="#comparison">Compare</a>
+                <a href="#quickstart">Get Started</a>
+                <a href="#community">Community</a>
+                <a href="https://github.com/srikanthrayudu/dev-box" target="_blank">GitHub</a>
+            </nav>
+        </div>
+    </header>
+
+    <section class="hero">
+        <div class="container">
+            <h1>IDE-Independent Developer Environments</h1>
+            <p>Break free from vendor lock-in. Keyless SSH. 5-10x faster builds. Works with Neovim, VS Code, JetBrains, Zed, Emacs.</p>
+            <div class="cta-buttons">
+                <a href="#quickstart" class="btn btn-primary">Get Started</a>
+                <a href="https://github.com/srikanthrayudu/dev-box" class="btn btn-secondary">View on GitHub</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="features" id="features">
+        <div class="container">
+            <h2>Why dev-box?</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>🎯 IDE-Independent</h3>
+                    <p>No vendor lock-in. Use Neovim, VS Code, JetBrains, Zed, Emacs, or plain terminal. Your choice.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔑 Keyless SSH</h3>
+                    <p>Embedded SSH server. Zero keys generated. Zero setup required. Works with any SSH client.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>⚡ Native Speed</h3>
+                    <p>Scratchpad Sync delivers 5-10x faster builds on macOS and Windows. Compile in native ext4.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🖥️ Cross-Platform</h3>
+                    <p>Single devbox.ini config works on Linux, macOS, and Windows. No OS-specific branching.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🧩 Layered Config</h3>
+                    <p>System → personal → project → local overrides. No Git conflicts. No fighting over shared config.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📦 Zero Bloat</h3>
+                    <p>Single 2MB Rust binary. Doesn't reinvent container runtimes. Built on Distrobox.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="comparison" id="comparison">
+        <div class="container">
+            <h2>How dev-box Compares</h2>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>dev-box</th>
+                        <th>VS Code Dev Containers</th>
+                        <th>Nix devshell</th>
+                        <th>devenv.sh</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>IDE-Independent</td>
+                        <td class="check">✓</td>
+                        <td class="cross">✗</td>
+                        <td class="check">✓</td>
+                        <td class="check">✓</td>
+                    </tr>
+                    <tr>
+                        <td>Embedded SSH</td>
+                        <td class="check">✓</td>
+                        <td class="cross">✗</td>
+                        <td class="cross">✗</td>
+                        <td class="cross">✗</td>
+                    </tr>
+                    <tr>
+                        <td>Single Binary</td>
+                        <td class="check">✓</td>
+                        <td class="cross">✗</td>
+                        <td class="cross">✗</td>
+                        <td class="cross">✗</td>
+                    </tr>
+                    <tr>
+                        <td>Cross-Platform Config</td>
+                        <td class="check">✓</td>
+                        <td class="check">✓</td>
+                        <td class="cross">✗</td>
+                        <td class="check">✓</td>
+                    </tr>
+                    <tr>
+                        <td>Native Filesystem Speed</td>
+                        <td class="check">✓</td>
+                        <td class="cross">✗</td>
+                        <td>~</td>
+                        <td>~</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="quickstart" id="quickstart">
+        <div class="container">
+            <h2>Quick Start</h2>
+            
+            <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">1. Install</h3>
+            <div class="code-block">
+<span class="comment"># Via cargo (for Rust developers)</span>
+cargo install dev-box
+
+<span class="comment"># Or download pre-built binary from</span>
+<span class="comment"># https://github.com/srikanthrayudu/dev-box/releases</span>
+            </div>
+
+            <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">2. Create Config</h3>
+            <div class="code-block">
+cat > devbox.ini << 'EOF'
+[dev-environment]
+name = "my-dev"
+image = "ubuntu:24.04"
+additional_packages = "git curl build-essential"
+EOF
+            </div>
+
+            <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">3. Boot Environment</h3>
+            <div class="code-block">
+dev-box up
+            </div>
+
+            <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">4. Connect from Your IDE</h3>
+            <div class="code-block">
+<span class="comment"># Plain SSH</span>
+ssh my-dev
+
+<span class="comment"># Or use VS Code Remote-SSH, JetBrains Gateway, etc.</span>
+            </div>
+
+            <p style="text-align: center; margin-top: 30px; color: #666;">
+                ✅ No SSH keys generated. No setup inside the box. Works on Linux, macOS, Windows.
+            </p>
+        </div>
+    </section>
+
+    <section class="stats">
+        <div class="container">
+            <h2 style="color: white; margin-bottom: 20px;">Why Developers Choose dev-box</h2>
+            <div class="stats-grid">
+                <div class="stat">
+                    <div class="stat-number">2MB</div>
+                    <div>Single Binary</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">5-10x</div>
+                    <div>Faster Builds</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">0</div>
+                    <div>SSH Keys</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">∞</div>
+                    <div>Editor Choices</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="community" id="community">
+        <div class="container">
+            <h2>Join the Community</h2>
+            <p>Have questions? Found a bug? Want to contribute? Let's build together.</p>
+            <div class="social-links">
+                <a href="https://github.com/srikanthrayudu/dev-box" class="social-link" target="_blank">
+                    ⭐ GitHub
+                </a>
+                <a href="https://github.com/srikanthrayudu/dev-box/discussions" class="social-link" target="_blank">
+                    💬 Discussions
+                </a>
+                <a href="https://github.com/srikanthrayudu/dev-box/issues" class="social-link" target="_blank">
+                    🐛 Issues
+                </a>
+                <a href="https://linkedin.com/in/srikanthrayudu" class="social-link" target="_blank">
+                    🔗 LinkedIn
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p>Built with ❤️ in Rust | MIT Licensed | No Vendor Lock-in</p>
+            <div class="footer-links">
+                <a href="https://github.com/srikanthrayudu/dev-box">GitHub</a>
+                <a href="https://github.com/srikanthrayudu/dev-box/blob/main/README.md">Full Documentation</a>
+                <a href="https://github.com/srikanthrayudu/dev-box/blob/main/CONTRIBUTING.md">Contributing</a>
+                <a href="https://github.com/srikanthrayudu/dev-box/blob/main/LICENSE">License</a>
+            </div>
+            <p style="margin-top: 20px; opacity: 0.7;">© 2026 dev-box. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>
