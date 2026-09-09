@@ -1,5 +1,8 @@
 # IDE Integration & Keyless SSH Guide
 
+> [!NOTE]
+> **Development Stage (Alpha)**: `dev-box` is in active development. While keyless SSH proxying and IDE attachments work with standard Remote-SSH clients, flags and configurations are subject to iteration before v1.0.
+
 **dev-box** automates the container developer experience without requiring proprietary extensions (like Microsoft's Dev Containers extension), Docker Desktop, or running a bloated SSH daemon inside your container.
 
 Any editor or IDE that supports remote development over SSH connects seamlessly.

@@ -1,5 +1,12 @@
 # dev-box
 
+[![Release](https://img.shields.io/github/v/release/srikanthrayudu/dev-box?color=blue&label=release)](https://github.com/srikanthrayudu/dev-box/releases)
+[![Status: Active Development](https://img.shields.io/badge/status-active--development%20%28alpha%29-orange.svg)](#status)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+> ⚠️ **Project Status: Early Development / Active Alpha**  
+> `dev-box` is currently in active development. Core orchestration, keyless SSH proxying, and scratchpad sync are working, but CLI interfaces and features may evolve rapidly before the `v1.0` stable release. Feedback, issues, and contributions are welcome!
+
 **dev-box** is a fast, IDE-independent developer environment orchestrator built on top of [Distrobox](https://distrobox.it).
 
 Unlike VS Code's Dev Containers, dev-box doesn't lock you into a specific editor. It's a small, single Rust binary that merges layered configuration and drives Distrobox to create reproducible, isolated dev environments — on Linux natively, on macOS via Podman Machine/Lima, and on Windows via WSL2. Any editor or IDE with remote/SSH support can connect to the resulting environment.
