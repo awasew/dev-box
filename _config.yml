@@ -1,0 +1,36 @@
+# GitHub Pages configuration for dev-box
+
+# Site settings
+title: dev-box
+description: "IDE-independent developer environments with keyless SSH, native filesystem performance, and zero vendor lock-in."
+url: "https://srikanthrayudu.github.io/dev-box"
+baseurl: "/dev-box"
+
+# Repository
+repository: srikanthrayudu/dev-box
+github_url: "https://github.com/srikanthrayudu/dev-box"
+
+# Author
+author:
+  name: Srikhant Rayudu
+  url: "https://github.com/srikanthrayudu"
+
+# Theme
+theme: jekyll-theme-minimal
+
+# Build settings
+markdown: kramdown
+plugins:
+  - jekyll-seo-tag
+  - jekyll-feed
+
+# Exclude from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - README.md
+  - LICENSE
+  - CONTRIBUTING.md
+  - CHANGELOG.md
+  - GROWTH_STRATEGY.md
+  - LINKEDIN_STRATEGY.md
