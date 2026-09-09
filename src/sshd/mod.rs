@@ -13,8 +13,9 @@
 
 mod handler;
 
-use crate::engine::distrobox::DistroboxEngine;
+use crate::engine::ContainerEngine;
 use crate::host::HostTransport;
+use crate::util;
 use anyhow::{Context, Result};
 use handler::DevBoxHandler;
 use russh::keys::{Algorithm, PrivateKey};
@@ -32,22 +33,27 @@ const INCLUDE_LINE: &str = "Include dev-box_config";
 /// session ends. Intended to be invoked as an SSH `ProxyCommand` target.
 /// `forwarded_env` is forwarded into every shell/exec session started
 /// inside the box (see `config::forwarded_env_from`).
+///
+/// Both `host` and `engine` are `Arc`s so they can be shared with the
+/// async handler without an extra allocation.
 pub fn run(
-    host: Box<dyn HostTransport>,
+    host: Arc<dyn HostTransport>,
     box_name: String,
     forwarded_env: Vec<(String, String)>,
+    engine: Arc<dyn ContainerEngine>,
 ) -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .context("failed to start the async runtime for ssh-proxy")?;
-    rt.block_on(serve(host, box_name, forwarded_env))
+    rt.block_on(serve(host, box_name, forwarded_env, engine))
 }
 
 async fn serve(
-    host: Box<dyn HostTransport>,
+    host: Arc<dyn HostTransport>,
     box_name: String,
     forwarded_env: Vec<(String, String)>,
+    engine: Arc<dyn ContainerEngine>,
 ) -> Result<()> {
     // A fresh, in-memory-only host key. It's never written to disk and
     // never needs to be trusted by the client (`StrictHostKeyChecking
@@ -62,8 +68,8 @@ async fn serve(
     });
 
     let handler = DevBoxHandler {
-        host: Arc::from(host),
-        engine: DistroboxEngine,
+        host,
+        engine,
         box_name: Arc::from(box_name.as_str()),
         forwarded_env,
         children: HashMap::new(),
@@ -110,17 +116,14 @@ pub fn install_client_config(box_name: &str, layers: &[PathBuf]) -> Result<()> {
     Ok(())
 }
 
-/// Resolves `path` to an absolute path relative to the current working
-/// directory, without requiring it to exist (config layers are commonly
-/// optional).
-pub fn to_absolute(path: &Path) -> Result<PathBuf> {
-    if path.is_absolute() {
-        Ok(path.to_path_buf())
-    } else {
-        Ok(std::env::current_dir()
-            .context("could not determine the current directory")?
-            .join(path))
-    }
+/// Resolves a slice of (potentially relative) config-layer paths to their
+/// absolute counterparts using `util::to_absolute`.
+pub fn absolute_layers(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
+    paths
+        .iter()
+        .map(|p| util::to_absolute(p))
+        .collect::<Result<Vec<_>>>()
+        .context("failed to resolve configuration layer paths")
 }
 
 /// Adds an `Include dev-box_config` line to the top of `~/.ssh/config` if

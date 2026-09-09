@@ -15,6 +15,10 @@ pub struct Cli {
     #[arg(short = 'c', long = "config", global = true)]
     pub config: Vec<PathBuf>,
 
+    /// Enable verbose debug logging (sets RUST_LOG=debug).
+    #[arg(short = 'v', long = "verbose", global = true)]
+    pub verbose: bool,
+
     #[command(subcommand)]
     pub command: Command,
 }

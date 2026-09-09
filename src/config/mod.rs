@@ -1,14 +1,17 @@
+use crate::util;
 use anyhow::{Context, Result};
 use ini::Ini;
 use std::path::PathBuf;
 
-/// Keys that combine additively across layers instead of being overwritten.
-const ADDITIVE_KEYS: &[&str] = &[
-    "additional_packages",
-    "init_hooks",
-    "exported_apps",
-    "forward_env",
-];
+/// Returns `true` if `key` is accumulated additively across layers instead
+/// of being overwritten by the highest-priority layer. Uses `matches!` for
+/// an O(1) compile-time check rather than a runtime slice scan.
+fn is_additive(key: &str) -> bool {
+    matches!(
+        key,
+        "additional_packages" | "init_hooks" | "exported_apps" | "forward_env"
+    )
+}
 
 /// The default N-layer cascade, in ascending priority order:
 /// user global preferences -> project config -> local (gitignored) overrides.
@@ -37,13 +40,13 @@ pub fn merge_layers(paths: &[PathBuf]) -> Result<Ini> {
 
         for (section, props) in layer.iter() {
             for (key, val) in props.iter() {
-                if ADDITIVE_KEYS.contains(&key) {
+                if is_additive(key) {
                     let existing = merged
                         .get_from(section, key)
+                        .map(util::unquote)
                         .unwrap_or("")
-                        .trim_matches('"')
                         .to_string();
-                    let new_val = val.trim_matches('"');
+                    let new_val = util::unquote(val);
                     let combined = if existing.is_empty() {
                         new_val.to_string()
                     } else {
@@ -82,8 +85,8 @@ pub fn to_ini_string(ini: &Ini) -> Result<String> {
 pub fn forwarded_env_from(ini: &Ini) -> Vec<(String, String)> {
     let names = ini
         .get_from(Some("dev-environment"), "forward_env")
+        .map(util::unquote)
         .unwrap_or("")
-        .trim_matches('"')
         .split_whitespace();
 
     let mut forwarded = Vec::new();

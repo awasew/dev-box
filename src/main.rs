@@ -1,16 +1,30 @@
 mod cli;
 mod config;
+mod context;
 mod engine;
 mod host;
 mod sshd;
+mod util;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
 use cli::{Cli, Command};
-use engine::{distrobox::DistroboxEngine, ContainerEngine};
+use config::to_ini_string;
+use context::AppContext;
+use std::sync::Arc;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    // Initialise logging. Always respect RUST_LOG if already set; otherwise
+    // default to "warn" (quiet) unless --verbose was passed (sets "debug").
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var(
+            "RUST_LOG",
+            if cli.verbose { "debug" } else { "warn" },
+        );
+    }
+    env_logger::init();
 
     let layers = if cli.config.is_empty() {
         config::default_layers()
@@ -18,14 +32,17 @@ fn main() -> Result<()> {
         cli.config.clone()
     };
 
+    // Build the shared context once; every command arm borrows or clones
+    // from it rather than re-running detection and config merge themselves.
+    let ctx = AppContext::new(&layers)?;
+
     match cli.command {
         Command::Config => {
-            let merged = config::merge_layers(&layers)?;
-            print!("{}", config::to_ini_string(&merged)?);
+            print!("{}", to_ini_string(&ctx.config)?);
         }
+
         Command::Up { dry_run } => {
-            let merged = config::merge_layers(&layers)?;
-            let payload = config::to_ini_string(&merged)?;
+            let payload = to_ini_string(&ctx.config)?;
 
             if dry_run {
                 println!("=== merged configuration (dry run) ===");
@@ -33,52 +50,40 @@ fn main() -> Result<()> {
                 return Ok(());
             }
 
-            let box_name = merged
-                .get_from(Some("dev-environment"), "name")
-                .context("no [dev-environment] name= found in the merged configuration")?
-                .to_string();
+            let box_name = ctx.box_name()?;
 
-            let host = host::detect();
-            eprintln!("==> host: {}", host.name());
-
-            let engine = DistroboxEngine;
-            engine
-                .assemble(host.as_ref(), &payload)
-                .context("failed to assemble the dev-box environment")?;
+            eprintln!("==> host: {}", ctx.host.name());
+            ctx.engine
+                .assemble(ctx.host.as_ref(), &payload)
+                .map_err(|e| e.context("failed to assemble the dev-box environment"))?;
 
             eprintln!("==> wiring up keyless SSH access for {box_name}");
-            let absolute_layers = layers
-                .iter()
-                .map(|p| sshd::to_absolute(p))
-                .collect::<Result<Vec<_>>>()
-                .context("failed to resolve configuration layer paths")?;
-            sshd::install_client_config(&box_name, &absolute_layers)
-                .context("failed to update the local SSH client configuration")?;
+            let abs_layers = sshd::absolute_layers(&layers)?;
+            sshd::install_client_config(&box_name, &abs_layers)
+                .map_err(|e| e.context("failed to update the local SSH client configuration"))?;
 
             eprintln!("==> dev-box environment is ready");
             eprintln!("==> connect with: ssh {box_name}");
         }
+
         Command::Enter { name } => {
-            let merged = config::merge_layers(&layers)?;
             let box_name = match name {
                 Some(n) => n,
-                None => merged
-                    .get_from(Some("dev-environment"), "name")
-                    .map(str::to_string)
-                    .context("no box name given and no [dev-environment] name= found in config")?,
+                None => ctx.box_name()
+                    .map_err(|e| e.context("no box name given and no [dev-environment] name= found in config"))?,
             };
-            let forwarded_env = config::forwarded_env_from(&merged);
-
-            let host = host::detect();
-            let engine = DistroboxEngine;
-            engine.enter(host.as_ref(), &box_name, &forwarded_env)?;
+            let forwarded_env = ctx.forwarded_env();
+            ctx.engine.enter(ctx.host.as_ref(), &box_name, &forwarded_env)?;
         }
-        Command::SshProxy { name } => {
-            let merged = config::merge_layers(&layers)?;
-            let forwarded_env = config::forwarded_env_from(&merged);
 
-            let host = host::detect();
-            sshd::run(host, name, forwarded_env)?;
+        Command::SshProxy { name } => {
+            let forwarded_env = ctx.forwarded_env();
+            sshd::run(
+                Arc::clone(&ctx.host),
+                name,
+                forwarded_env,
+                Arc::clone(&ctx.engine),
+            )?;
         }
     }
 

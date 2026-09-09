@@ -16,24 +16,16 @@ impl MacHost {
         } else if which::which("limactl").is_ok() {
             MacHost::Lima
         } else {
-            // Default to Podman Machine; `run` surfaces a clear install
-            // error if neither binary is actually present.
+            // Neither tool found — warn now rather than waiting for the
+            // first `run()` call, so the user gets a clear message early.
+            eprintln!(
+                "==> warning: neither `podman` nor `limactl` was found. \
+                 Install Podman Machine (https://podman.io) or Lima (https://lima-vm.io) \
+                 before running `dev-box up`."
+            );
+            // Default to Podman Machine; `run` will surface the install
+            // error if the user proceeds without fixing it.
             MacHost::PodmanMachine
-        }
-    }
-
-    fn wrap(&self, script: &str) -> Command {
-        match self {
-            MacHost::PodmanMachine => {
-                let mut cmd = Command::new("podman");
-                cmd.args(["machine", "ssh", script]);
-                cmd
-            }
-            MacHost::Lima => {
-                let mut cmd = Command::new("limactl");
-                cmd.args(["shell", "default", "sh", "-c", script]);
-                cmd
-            }
         }
     }
 
@@ -42,6 +34,23 @@ impl MacHost {
             MacHost::PodmanMachine => "podman",
             MacHost::Lima => "limactl",
         }
+    }
+
+    /// Returns the `(binary, args)` pair needed to execute `script` inside
+    /// the VM, shared by both the `std::process` and `tokio::process` paths
+    /// so the match logic only exists in one place.
+    fn cmd_parts<'a>(&self, script: &'a str) -> (&'static str, Vec<&'a str>) {
+        match self {
+            MacHost::PodmanMachine => ("podman", vec!["machine", "ssh", script]),
+            MacHost::Lima => ("limactl", vec!["shell", "default", "sh", "-c", script]),
+        }
+    }
+
+    fn wrap(&self, script: &str) -> Command {
+        let (bin, args) = self.cmd_parts(script);
+        let mut cmd = Command::new(bin);
+        cmd.args(args);
+        cmd
     }
 }
 
@@ -73,18 +82,9 @@ impl HostTransport for MacHost {
                 "macOS requires Podman Machine or Lima to run distrobox. Install one of them and try again."
             );
         }
-        let mut cmd = match self {
-            MacHost::PodmanMachine => {
-                let mut c = tokio::process::Command::new("podman");
-                c.args(["machine", "ssh", script]);
-                c
-            }
-            MacHost::Lima => {
-                let mut c = tokio::process::Command::new("limactl");
-                c.args(["shell", "default", "sh", "-c", script]);
-                c
-            }
-        };
+        let (bin, args) = self.cmd_parts(script);
+        let mut cmd = tokio::process::Command::new(bin);
+        cmd.args(args);
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());

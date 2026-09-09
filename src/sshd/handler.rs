@@ -14,7 +14,7 @@
 //! command inside it) via `HostTransport::spawn_piped`, and pumps bytes
 //! between the SSH channel and the child process's stdio.
 
-use crate::engine::{distrobox::DistroboxEngine, ContainerEngine};
+use crate::engine::ContainerEngine;
 use crate::host::HostTransport;
 use anyhow::Context;
 use russh::server::{Auth, ChannelOpenHandle, Handler, Session};
@@ -23,13 +23,27 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::ChildStdin;
+use tokio::sync::oneshot;
+
+/// Tracks the live state of a child process spawned for an SSH channel.
+struct ChildState {
+    /// The child's stdin pipe. Set to `None` once `channel_eof` is received,
+    /// which closes the pipe and signals EOF to the process inside the box.
+    stdin: Option<ChildStdin>,
+    /// Sending on this channel triggers `child.kill()` in the background
+    /// exit-watcher task, so closing an SSH channel always terminates the
+    /// underlying `distrobox enter` process immediately.
+    kill_tx: oneshot::Sender<()>,
+}
 
 pub struct DevBoxHandler {
     pub host: Arc<dyn HostTransport>,
-    pub engine: DistroboxEngine,
+    /// Stored as `Arc<dyn ContainerEngine>` so the SSH handler is decoupled
+    /// from `DistroboxEngine` specifically and works with any future backend.
+    pub engine: Arc<dyn ContainerEngine>,
     pub box_name: Arc<str>,
     pub forwarded_env: Vec<(String, String)>,
-    pub children: HashMap<ChannelId, ChildStdin>,
+    pub children: HashMap<ChannelId, ChildState>,
 }
 
 impl DevBoxHandler {
@@ -38,6 +52,10 @@ impl DevBoxHandler {
     /// arrive, and the channel is closed with the child's exit status
     /// once it terminates. The child's stdin is retained so `data()` can
     /// forward further client input to it.
+    ///
+    /// A `oneshot` kill channel is wired into the exit-watcher task so
+    /// that `channel_close` can immediately terminate the child rather
+    /// than waiting for it to drain naturally.
     fn spawn_child(
         &mut self,
         channel: ChannelId,
@@ -51,7 +69,15 @@ impl DevBoxHandler {
         let stdin = child.stdin.take().context("child stdin missing")?;
         let mut stdout = child.stdout.take().context("child stdout missing")?;
         let mut stderr = child.stderr.take().context("child stderr missing")?;
-        self.children.insert(channel, stdin);
+
+        let (kill_tx, kill_rx) = oneshot::channel::<()>();
+        self.children.insert(
+            channel,
+            ChildState {
+                stdin: Some(stdin),
+                kill_tx,
+            },
+        );
 
         let out_handle = session.handle();
         tokio::spawn(async move {
@@ -89,11 +115,23 @@ impl DevBoxHandler {
 
         let exit_handle = session.handle();
         tokio::spawn(async move {
-            let status = child.wait().await;
-            let code = status.ok().and_then(|s| s.code()).unwrap_or(1) as u32;
-            let _ = exit_handle.exit_status_request(channel, code).await;
-            let _ = exit_handle.eof(channel).await;
-            let _ = exit_handle.close(channel).await;
+            tokio::select! {
+                // Normal path: child exits on its own.
+                status = child.wait() => {
+                    let code = status.ok().and_then(|s| s.code()).unwrap_or(1) as u32;
+                    let _ = exit_handle.exit_status_request(channel, code).await;
+                    let _ = exit_handle.eof(channel).await;
+                    let _ = exit_handle.close(channel).await;
+                }
+                // Kill path: channel_close sent the kill signal before the
+                // child exited; terminate it immediately.
+                _ = kill_rx => {
+                    child.kill().await.ok();
+                    let _ = exit_handle.exit_status_request(channel, 1).await;
+                    let _ = exit_handle.eof(channel).await;
+                    let _ = exit_handle.close(channel).await;
+                }
+            }
         });
 
         Ok(())
@@ -152,9 +190,11 @@ impl Handler for DevBoxHandler {
         data: &[u8],
         _session: &mut Session,
     ) -> Result<(), Self::Error> {
-        if let Some(stdin) = self.children.get_mut(&channel) {
-            let _ = stdin.write_all(data).await;
-            let _ = stdin.flush().await;
+        if let Some(state) = self.children.get_mut(&channel) {
+            if let Some(stdin) = &mut state.stdin {
+                let _ = stdin.write_all(data).await;
+                let _ = stdin.flush().await;
+            }
         }
         Ok(())
     }
@@ -164,9 +204,13 @@ impl Handler for DevBoxHandler {
         channel: ChannelId,
         _session: &mut Session,
     ) -> Result<(), Self::Error> {
-        // Dropping the child's stdin handle closes that pipe, signaling
-        // EOF to the process inside the box.
-        self.children.remove(&channel);
+        // Drop the child's stdin handle to close the pipe, signalling EOF to
+        // the process inside the box. The ChildState itself (and its kill_tx)
+        // stays alive so channel_close can still send the kill signal if the
+        // process doesn't exit on its own after receiving EOF.
+        if let Some(state) = self.children.get_mut(&channel) {
+            state.stdin = None;
+        }
         Ok(())
     }
 
@@ -175,7 +219,12 @@ impl Handler for DevBoxHandler {
         channel: ChannelId,
         _session: &mut Session,
     ) -> Result<(), Self::Error> {
-        self.children.remove(&channel);
+        // Trigger the kill signal so the background exit-watcher task
+        // terminates the child immediately. If the child already exited
+        // naturally, kill_rx was dropped and the send is a harmless no-op.
+        if let Some(state) = self.children.remove(&channel) {
+            let _ = state.kill_tx.send(());
+        }
         Ok(())
     }
 
