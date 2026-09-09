@@ -1,0 +1,36 @@
+[package]
+name = "dev-box"
+version = "0.1.0"
+edition = "2021"
+description = "IDE-independent developer environment orchestrator built on Distrobox"
+license = "MIT"
+repository = "https://github.com/srikanthrayudu/dev-box"
+readme = "README.md"
+
+[[bin]]
+name = "dev-box"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.6", features = ["derive"] }
+# The "ini" crate name here maps to the `rust-ini` package on crates.io,
+# which is the actively maintained Ini::load_from_file / with_section API.
+ini = { package = "rust-ini", version = "0.21" }
+which = "8.0"
+dirs = "7.0"
+anyhow = "1.0"
+
+# Embedded SSH server used by `dev-box ssh-proxy`: speaks the SSH
+# protocol directly over stdin/stdout (no TCP listener, no host sshd,
+# no keys) so any Remote-SSH-capable IDE can attach transparently.
+russh = "0.63"
+tokio = { version = "1", features = ["rt-multi-thread", "io-std", "io-util", "process"] }
+rand = "0.10"
+
+# Binary size & speed optimizations for release builds.
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
