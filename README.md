@@ -151,6 +151,7 @@ Clone one of our examples and run `dev-box up`:
 - **[README](README.md)** — Full feature overview and configuration guide
 - **[IDE Integration Guide](docs/ide-integration.md)** — Setup for VS Code, JetBrains, Zed, Neovim, Emacs
 - **[Filesystem Performance Guide](docs/filesystem-performance.md)** — Benchmarks, architecture, optimization
+- **[dev-box vs. Jetify Devbox](docs/vs-jetify-devbox.md)** — How the two projects actually differ, and what ideas we've borrowed
 - **[CONTRIBUTING](CONTRIBUTING.md)** — How to contribute (we welcome PRs!)
 
 ---
