@@ -2,8 +2,9 @@
 
 # Site settings
 title: dev-box
-description: "IDE-independent developer environments with keyless SSH, native filesystem performance, and zero vendor lock-in."
-url: "https://srikanthrayudu.github.io/dev-box"
+tagline: "IDE-independent developer environments with keyless SSH, native filesystem performance, and zero vendor lock-in."
+description: "A lightweight, single-binary Rust orchestrator for reproducible developer environments on any platform — without vendor lock-in, without SSH key setup, and with 5-10x faster builds on macOS/Windows."
+url: "https://srikanthrayudu.github.io"
 baseurl: "/dev-box"
 
 # Repository
@@ -12,25 +13,60 @@ github_url: "https://github.com/srikanthrayudu/dev-box"
 
 # Author
 author:
-  name: Srikhant Rayudu
+  name: Srikanth Rayudu
   url: "https://github.com/srikanthrayudu"
+  github: srikanthrayudu
+  twitter: srikanthrayudu
+  linkedin: srikanthrayudu
+
+# Social & Open Graph (for jekyll-seo-tag)
+logo: "/docs/images/hero.png"
+twitter:
+  username: srikanthrayudu
+  card: summary_large_image
+social:
+  name: dev-box
+  links:
+    - "https://github.com/srikanthrayudu/dev-box"
+    - "https://github.com/srikanthrayudu/dev-box/discussions"
+    - "https://linkedin.com/in/srikanthrayudu"
+    - "https://twitter.com/srikanthrayudu"
 
 # Theme
 theme: jekyll-theme-minimal
 
-# Build settings
+# Build & Markdown settings
 markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    css_class: 'highlight'
+
+# Plugins supported by GitHub Pages
 plugins:
   - jekyll-seo-tag
   - jekyll-feed
+  - jekyll-sitemap
 
-# Exclude from processing
+# Documentation Collections / Permalinks
+permalink: /:categories/:title:output_ext
+
+# Exclude internal and build-related files from Jekyll processing
 exclude:
   - Gemfile
   - Gemfile.lock
-  - README.md
+  - Cargo.toml
+  - Cargo.lock
+  - target/
+  - src/
+  - devbox.ini
+  - devbox.local.ini
+  - .github/
+  - .gitignore
   - LICENSE
   - CONTRIBUTING.md
   - CHANGELOG.md
   - GROWTH_STRATEGY.md
   - LINKEDIN_STRATEGY.md
+

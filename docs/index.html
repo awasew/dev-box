@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>dev-box - IDE-Independent Developer Environments</title>
-    <meta name="description" content="Lightweight, cross-platform developer environments with keyless SSH and native filesystem performance.">
+    <meta name="description"
+        content="Lightweight, cross-platform developer environments with keyless SSH and native filesystem performance.">
     <meta name="keywords" content="dev-containers, distrobox, rust, developer-tools, ssh, cross-platform">
     <meta name="og:title" content="dev-box - Break Free from VS Code Dev Containers">
-    <meta name="og:description" content="IDE-independent dev environments without vendor lock-in. Keyless SSH. 5-10x faster builds.">
+    <meta name="og:description"
+        content="IDE-independent dev environments without vendor lock-in. Keyless SSH. 5-10x faster builds.">
     <meta name="og:image" content="https://raw.githubusercontent.com/srikanthrayudu/dev-box/main/docs/images/hero.png">
     <style>
         * {
@@ -30,7 +33,7 @@
             position: sticky;
             top: 0;
             z-index: 100;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
 
         header .container {
@@ -114,7 +117,7 @@
 
         .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
         }
 
         .btn-secondary {
@@ -150,13 +153,13 @@
             background: white;
             padding: 30px;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
             transition: transform 0.3s, box-shadow 0.3s;
         }
 
         .feature-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
         }
 
         .feature-card h3 {
@@ -189,7 +192,7 @@
             background: white;
             border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
         }
 
         .comparison-table th,
@@ -393,7 +396,11 @@
                 display: none;
             }
 
-            .features h2, .comparison h2, .quickstart h2, .testimonials h2, .community h2 {
+            .features h2,
+            .comparison h2,
+            .quickstart h2,
+            .testimonials h2,
+            .community h2 {
                 font-size: 28px;
             }
 
@@ -401,12 +408,14 @@
                 font-size: 12px;
             }
 
-            .comparison-table th, .comparison-table td {
+            .comparison-table th,
+            .comparison-table td {
                 padding: 10px;
             }
         }
     </style>
 </head>
+
 <body>
     <header>
         <div class="container">
@@ -424,7 +433,8 @@
     <section class="hero">
         <div class="container">
             <h1>IDE-Independent Developer Environments</h1>
-            <p>Break free from vendor lock-in. Keyless SSH. 5-10x faster builds. Works with Neovim, VS Code, JetBrains, Zed, Emacs.</p>
+            <p>Break free from vendor lock-in. Keyless SSH. 5-10x faster builds. Works with Neovim, VS Code, JetBrains,
+                Zed, Emacs.</p>
             <div class="cta-buttons">
                 <a href="#quickstart" class="btn btn-primary">Get Started</a>
                 <a href="https://github.com/srikanthrayudu/dev-box" class="btn btn-secondary">View on GitHub</a>
@@ -438,7 +448,8 @@
             <div class="feature-grid">
                 <div class="feature-card">
                     <h3>🎯 IDE-Independent</h3>
-                    <p>No vendor lock-in. Use Neovim, VS Code, JetBrains, Zed, Emacs, or plain terminal. Your choice.</p>
+                    <p>No vendor lock-in. Use Neovim, VS Code, JetBrains, Zed, Emacs, or plain terminal. Your choice.
+                    </p>
                 </div>
                 <div class="feature-card">
                     <h3>🔑 Keyless SSH</h3>
@@ -454,7 +465,8 @@
                 </div>
                 <div class="feature-card">
                     <h3>🧩 Layered Config</h3>
-                    <p>System → personal → project → local overrides. No Git conflicts. No fighting over shared config.</p>
+                    <p>System → personal → project → local overrides. No Git conflicts. No fighting over shared config.
+                    </p>
                 </div>
                 <div class="feature-card">
                     <h3>📦 Zero Bloat</h3>
@@ -521,43 +533,38 @@
     <section class="quickstart" id="quickstart">
         <div class="container">
             <h2>Quick Start</h2>
-            
+
             <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">1. Install</h3>
             <div class="code-block">
-<span class="comment"># Via cargo (for Rust developers)</span>
-cargo install dev-box
+                <span class="comment"># Via cargo (for Rust developers)</span>
+                cargo install dev-box
 
-<span class="comment"># Or download pre-built binary from</span>
-<span class="comment"># https://github.com/srikanthrayudu/dev-box/releases</span>
+                <span class="comment"># Or download pre-built binary from</span>
+                <span class="comment"># https://github.com/srikanthrayudu/dev-box/releases</span>
             </div>
 
             <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">2. Create Config</h3>
             <div class="code-block">
-cat > devbox.ini << 'EOF'
-[dev-environment]
-name = "my-dev"
-image = "ubuntu:24.04"
-additional_packages = "git curl build-essential"
-EOF
+                cat > devbox.ini << 'EOF' [dev-environment] name="my-dev" image="ubuntu:24.04"
+                    additional_packages="git curl build-essential" EOF </div>
+
+                    <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">3. Boot Environment</h3>
+                    <div class="code-block">
+                        dev-box up
+                    </div>
+
+                    <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">4. Connect from Your IDE</h3>
+                    <div class="code-block">
+                        <span class="comment"># Plain SSH</span>
+                        ssh my-dev
+
+                        <span class="comment"># Or use VS Code Remote-SSH, JetBrains Gateway, etc.</span>
+                    </div>
+
+                    <p style="text-align: center; margin-top: 30px; color: #666;">
+                        ✅ No SSH keys generated. No setup inside the box. Works on Linux, macOS, Windows.
+                    </p>
             </div>
-
-            <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">3. Boot Environment</h3>
-            <div class="code-block">
-dev-box up
-            </div>
-
-            <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">4. Connect from Your IDE</h3>
-            <div class="code-block">
-<span class="comment"># Plain SSH</span>
-ssh my-dev
-
-<span class="comment"># Or use VS Code Remote-SSH, JetBrains Gateway, etc.</span>
-            </div>
-
-            <p style="text-align: center; margin-top: 30px; color: #666;">
-                ✅ No SSH keys generated. No setup inside the box. Works on Linux, macOS, Windows.
-            </p>
-        </div>
     </section>
 
     <section class="stats">
@@ -618,4 +625,5 @@ ssh my-dev
         </div>
     </footer>
 </body>
+
 </html>
