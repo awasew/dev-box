@@ -1,4 +1,4 @@
-//! Platform transports: *how* dev-box reaches the Linux layer that
+//! Platform transports: *how* dbx reaches the Linux layer that
 //! actually runs distrobox.
 //!
 //! This module is the "ports and adapters" seam of the whole codebase.
@@ -30,7 +30,7 @@ use anyhow::{Context, Result};
 use std::io::Write;
 use std::process::{Command, ExitStatus, Stdio};
 
-/// Abstracts *how* dev-box reaches the Linux layer that actually runs
+/// Abstracts *how* dbx reaches the Linux layer that actually runs
 /// distrobox: natively on Linux, via WSL2 on Windows, and via Podman
 /// Machine/Lima on macOS.
 ///
@@ -107,7 +107,7 @@ pub fn detect() -> Box<dyn HostTransport> {
     }
     #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
     {
-        compile_error!("dev-box does not support this platform");
+        compile_error!("dbx does not support this platform");
     }
 }
 

@@ -1,5 +1,5 @@
 [package]
-name = "dev-box"
+name = "dbx"
 version = "0.1.0"
 edition = "2021"
 # `sshd::with_ssh_config_lock` uses `std::fs::File::lock`/`unlock`,
@@ -8,11 +8,11 @@ edition = "2021"
 rust-version = "1.89"
 description = "IDE-independent developer environment orchestrator built on Distrobox"
 license = "MIT"
-repository = "https://github.com/srikanthrayudu/dev-box"
+repository = "https://github.com/srikanthrayudu/dbx"
 readme = "README.md"
 
 [[bin]]
-name = "dev-box"
+name = "dbx"
 path = "src/main.rs"
 
 [dependencies]

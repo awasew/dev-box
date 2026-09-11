@@ -1,13 +1,13 @@
-//! dev-box's "keyless" SSH bridge.
+//! dbx's "keyless" SSH bridge.
 //!
 //! Instead of installing and configuring a real `sshd` inside every box
 //! (which would mean touching the container's filesystem and package
-//! set), dev-box embeds a minimal SSH server directly in its own binary.
-//! `dev-box ssh-proxy <box>` speaks the SSH protocol over its own
+//! set), dbx embeds a minimal SSH server directly in its own binary.
+//! `dbx ssh-proxy <box>` speaks the SSH protocol over its own
 //! stdin/stdout -- exactly what an SSH `ProxyCommand` expects -- and
 //! never opens a TCP listener at all.
 //!
-//! The only thing dev-box ever changes on the host is a managed block in
+//! The only thing dbx ever changes on the host is a managed block in
 //! `~/.ssh/config` (see `install_client_config`); nothing inside the box
 //! is touched.
 
@@ -17,17 +17,18 @@ use crate::engine::ContainerEngine;
 use crate::host::HostTransport;
 use crate::util;
 use anyhow::{Context, Result};
-use handler::DevBoxHandler;
+use handler::DbxHandler;
 use russh::keys::{Algorithm, PrivateKey};
 use russh::server::{self, Config};
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-const BEGIN_MARKER_PREFIX: &str = "# >>> dev-box:";
-const END_MARKER_PREFIX: &str = "# <<< dev-box:";
-const INCLUDE_LINE: &str = "Include dev-box_config";
+const BEGIN_MARKER_PREFIX: &str = "# >>> dbx:";
+const END_MARKER_PREFIX: &str = "# <<< dbx:";
+const LEGACY_BEGIN_MARKER_PREFIX: &str = "# >>> dev-box:";
+const LEGACY_END_MARKER_PREFIX: &str = "# <<< dev-box:";
+const INCLUDE_LINE: &str = "Include dbx_config";
 
 /// Runs the embedded SSH server for `box_name`, blocking until the
 /// session ends. Intended to be invoked as an SSH `ProxyCommand` target.
@@ -69,15 +70,13 @@ async fn serve(
         ..Default::default()
     });
 
-    let handler = DevBoxHandler {
+    let handler = DbxHandler::new(
         host,
         engine,
-        box_name: Arc::from(box_name.as_str()),
+        Arc::from(box_name.as_str()),
         forwarded_env,
         work_dir,
-        children: HashMap::new(),
-        pending_pty: HashMap::new(),
-    };
+    );
 
     let stream = tokio::io::join(tokio::io::stdin(), tokio::io::stdout());
 
@@ -100,7 +99,7 @@ async fn serve(
 /// explicit `-c` flags so that `ssh <box_name>` -- which may be invoked
 /// by an IDE from an arbitrary working directory -- always resolves the
 /// exact same configuration (and therefore the same `forward_env` list)
-/// that `dev-box up` used, regardless of its own current directory.
+/// that `dbx up` used, regardless of its own current directory.
 pub fn install_client_config(box_name: &str, layers: &[PathBuf]) -> Result<()> {
     let ssh_dir = dirs::home_dir()
         .context("could not determine the home directory")?
@@ -115,7 +114,11 @@ pub fn install_client_config(box_name: &str, layers: &[PathBuf]) -> Result<()> {
         }
 
         ensure_include(&ssh_dir.join("config"))?;
-        upsert_host_block(&ssh_dir.join("dev-box_config"), box_name, layers)?;
+        upsert_host_block(&ssh_dir.join("dbx_config"), box_name, layers)?;
+        let legacy_config = ssh_dir.join("dev-box_config");
+        if legacy_config.exists() {
+            let _ = remove_host_block(&legacy_config, box_name);
+        }
         Ok(())
     })
 }
@@ -124,9 +127,9 @@ pub fn install_client_config(box_name: &str, layers: &[PathBuf]) -> Result<()> {
 /// dedicated lock file inside `ssh_dir`.
 ///
 /// `install_client_config` and `remove_client_config` each do a
-/// read-modify-write of `~/.ssh/config` and `~/.ssh/dev-box_config`. If
-/// two `dev-box` invocations for different boxes race (e.g. `dev-box up`
-/// for one project while `dev-box rm` runs for another), an unguarded
+/// read-modify-write of `~/.ssh/config` and `~/.ssh/dbx_config`. If
+/// two `dbx` invocations for different boxes race (e.g. `dbx up`
+/// for one project while `dbx rm` runs for another), an unguarded
 /// read-modify-write could interleave and drop one process's edit. This
 /// forces them to serialize instead. The lock is released automatically
 /// when `lock_file` is dropped at the end of this function (or on an
@@ -135,7 +138,7 @@ fn with_ssh_config_lock<T>(ssh_dir: &Path, f: impl FnOnce() -> Result<T>) -> Res
     fs::create_dir_all(ssh_dir)
         .with_context(|| format!("failed to create {}", ssh_dir.display()))?;
 
-    let lock_path = ssh_dir.join(".dev-box.lock");
+    let lock_path = ssh_dir.join(".dbx.lock");
     let lock_file = fs::OpenOptions::new()
         .create(true)
         .write(true)
@@ -160,7 +163,7 @@ pub fn absolute_layers(paths: &[PathBuf]) -> Result<Vec<PathBuf>> {
         .context("failed to resolve configuration layer paths")
 }
 
-/// Adds an `Include dev-box_config` line to the top of `~/.ssh/config` if
+/// Adds an `Include dbx_config` line to the top of `~/.ssh/config` if
 /// it isn't already present. Never touches any other line the user owns.
 fn ensure_include(config_path: &Path) -> Result<()> {
     let existing = fs::read_to_string(config_path).unwrap_or_default();
@@ -177,13 +180,15 @@ fn ensure_include(config_path: &Path) -> Result<()> {
 }
 
 /// Inserts or replaces the marker-delimited `Host` block for `box_name`
-/// inside dev-box's own managed config file, leaving every other box's
+/// inside dbx's own managed config file, leaving every other box's
 /// block untouched.
 fn upsert_host_block(path: &Path, box_name: &str, layers: &[PathBuf]) -> Result<()> {
     let exe =
-        std::env::current_exe().context("could not determine dev-box's own executable path")?;
+        std::env::current_exe().context("could not determine dbx's own executable path")?;
     let begin = format!("{BEGIN_MARKER_PREFIX} {box_name} >>>");
     let end = format!("{END_MARKER_PREFIX} {box_name} <<<");
+    let legacy_begin = format!("{LEGACY_BEGIN_MARKER_PREFIX} {box_name} >>>");
+    let legacy_end = format!("{LEGACY_END_MARKER_PREFIX} {box_name} <<<");
 
     let mut config_flags = String::new();
     for layer in layers {
@@ -200,11 +205,11 @@ fn upsert_host_block(path: &Path, box_name: &str, layers: &[PathBuf]) -> Result<
 
     let existing_block = lines
         .iter()
-        .position(|l| l.trim() == begin)
+        .position(|l| l.trim() == begin || l.trim() == legacy_begin)
         .and_then(|start| {
             lines[start..]
                 .iter()
-                .position(|l| l.trim() == end)
+                .position(|l| l.trim() == end || l.trim() == legacy_end)
                 .map(|offset| (start, start + offset))
         });
 
@@ -236,19 +241,23 @@ fn upsert_host_block(path: &Path, box_name: &str, layers: &[PathBuf]) -> Result<
 }
 
 /// Removes the managed SSH client config block for `box_name` from
-/// `~/.ssh/dev-box_config` when the box is deleted.
+/// `~/.ssh/dbx_config` when the box is deleted.
 pub fn remove_client_config(box_name: &str) -> Result<()> {
     let ssh_dir = match dirs::home_dir() {
         Some(h) => h.join(".ssh"),
         None => return Ok(()),
     };
-    let config_path = ssh_dir.join("dev-box_config");
+    let config_path = ssh_dir.join("dbx_config");
+    let legacy_config_path = ssh_dir.join("dev-box_config");
 
     with_ssh_config_lock(&ssh_dir, || {
-        if !config_path.exists() {
-            return Ok(());
+        if config_path.exists() {
+            remove_host_block(&config_path, box_name)?;
         }
-        remove_host_block(&config_path, box_name)
+        if legacy_config_path.exists() {
+            let _ = remove_host_block(&legacy_config_path, box_name);
+        }
+        Ok(())
     })
 }
 
@@ -257,17 +266,19 @@ pub fn remove_client_config(box_name: &str) -> Result<()> {
 fn remove_host_block(path: &Path, box_name: &str) -> Result<()> {
     let begin = format!("{BEGIN_MARKER_PREFIX} {box_name} >>>");
     let end = format!("{END_MARKER_PREFIX} {box_name} <<<");
+    let legacy_begin = format!("{LEGACY_BEGIN_MARKER_PREFIX} {box_name} >>>");
+    let legacy_end = format!("{LEGACY_END_MARKER_PREFIX} {box_name} <<<");
 
     let existing = fs::read_to_string(path).unwrap_or_default();
     let lines: Vec<&str> = existing.lines().collect();
 
     let existing_block = lines
         .iter()
-        .position(|l| l.trim() == begin)
+        .position(|l| l.trim() == begin || l.trim() == legacy_begin)
         .and_then(|start| {
             lines[start..]
                 .iter()
-                .position(|l| l.trim() == end)
+                .position(|l| l.trim() == end || l.trim() == legacy_end)
                 .map(|offset| (start, start + offset))
         });
 
@@ -295,7 +306,7 @@ mod tests {
 
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
-            "dev-box-sshd-test-{name}-{}-{:?}",
+            "dbx-sshd-test-{name}-{}-{:?}",
             std::process::id(),
             std::thread::current().id()
         ))
@@ -339,9 +350,9 @@ mod tests {
 
     #[test]
     fn upsert_host_block_inserts_then_updates_in_place() {
-        let path = temp_path("dev-box-config");
+        let path = temp_path("dbx-config");
         let _ = fs::remove_file(&path);
-        let layers = vec![PathBuf::from("/tmp/devbox.ini")];
+        let layers = vec![PathBuf::from("/tmp/dbx.ini")];
 
         upsert_host_block(&path, "my-box", &layers).expect("first insert");
         let first = fs::read_to_string(&path).expect("read");
@@ -366,9 +377,9 @@ mod tests {
 
     #[test]
     fn remove_host_block_deletes_only_the_named_block() {
-        let path = temp_path("dev-box-config-remove");
+        let path = temp_path("dbx-config-remove");
         let _ = fs::remove_file(&path);
-        let layers = vec![PathBuf::from("/tmp/devbox.ini")];
+        let layers = vec![PathBuf::from("/tmp/dbx.ini")];
 
         upsert_host_block(&path, "keep-box", &layers).expect("insert keep-box");
         upsert_host_block(&path, "drop-box", &layers).expect("insert drop-box");
@@ -383,7 +394,7 @@ mod tests {
 
     #[test]
     fn remove_host_block_is_a_noop_when_block_absent() {
-        let path = temp_path("dev-box-config-noop");
+        let path = temp_path("dbx-config-noop");
         fs::write(&path, "Host untouched\n    HostName example.com\n").expect("seed");
 
         remove_host_block(&path, "nonexistent-box").expect("no-op succeeds");
@@ -395,10 +406,10 @@ mod tests {
 
     #[test]
     fn absolute_layers_resolves_relative_paths() {
-        let layers = vec![PathBuf::from("devbox.ini")];
+        let layers = vec![PathBuf::from("dbx.ini")];
         let resolved = absolute_layers(&layers).expect("resolves");
         assert!(resolved[0].is_absolute());
-        assert!(resolved[0].ends_with("devbox.ini"));
+        assert!(resolved[0].ends_with("dbx.ini"));
     }
 
     #[test]
@@ -408,7 +419,7 @@ mod tests {
 
         let value = with_ssh_config_lock(&dir, || Ok(42)).expect("closure runs");
         assert_eq!(value, 42);
-        assert!(dir.join(".dev-box.lock").exists());
+        assert!(dir.join(".dbx.lock").exists());
 
         let _ = fs::remove_dir_all(&dir);
     }

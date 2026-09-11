@@ -1,6 +1,6 @@
 # Architecture
 
-This document explains how dev-box's codebase is organized, why it's organized that
+This document explains how dbx's codebase is organized, why it's organized that
 way, and how to extend it (new platform, new container backend, new command) without
 fighting the grain of the design.
 
@@ -12,7 +12,7 @@ the single idea that makes the rest of the codebase predictable.
 ## Goals that shaped the design
 
 - **IDE-independent**: nothing here should assume a specific editor. The only
-  "protocol" dev-box exposes to the outside world is SSH.
+  "protocol" dbx exposes to the outside world is SSH.
 - **Cross-platform without `#[cfg]` soup**: platform differences (Linux native, WSL2
   on Windows, Podman Machine/Lima on macOS) are isolated behind one trait, not
   scattered through `if cfg!(windows)` checks in business logic.
@@ -163,11 +163,11 @@ flowchart TD
 `--config <path>` (repeatable, in `cli.rs`) replaces this default cascade entirely,
 which is also how `sshd::install_client_config` pins the exact layer set into the
 generated `ProxyCommand` — so `ssh <box>` run by an IDE from an arbitrary working
-directory always resolves the same configuration `dev-box up` used.
+directory always resolves the same configuration `dbx up` used.
 
 ---
 
-## Command flow: `dev-box up`
+## Command flow: `dbx up`
 
 ```mermaid
 sequenceDiagram
@@ -178,7 +178,7 @@ sequenceDiagram
     participant Host as HostTransport
     participant Sshd as sshd module
 
-    User->>Main: dev-box up
+    User->>Main: dbx up
     Main->>Cfg: merge_layers
     Cfg-->>Main: merged Ini
     Main->>Eng: assemble host and payload
@@ -190,7 +190,7 @@ sequenceDiagram
 ```
 
 `install_client_config` acquires an OS file lock (`sshd::with_ssh_config_lock`) before
-touching either file, so two `dev-box up`/`dev-box rm` invocations for different boxes
+touching either file, so two `dbx up`/`dbx rm` invocations for different boxes
 never interleave their read-modify-write of the same config files.
 
 ---
@@ -205,7 +205,7 @@ stdin/stdout.
 ```mermaid
 sequenceDiagram
     participant Client as SSH client
-    participant Proxy as dev-box ssh-proxy
+    participant Proxy as dbx ssh-proxy
     participant Host as HostTransport
     participant Box as distrobox container
 
@@ -245,7 +245,7 @@ path, exactly like talking to a real `sshd`.
 
 ---
 
-## Extending dev-box
+## Extending dbx
 
 ### Add a new platform (e.g. FreeBSD, or a remote-SSH-host transport)
 
@@ -301,7 +301,7 @@ path, exactly like talking to a real `sshd`.
 | Layer | Where | What it covers | Needs a container runtime? |
 |---|---|---|---|
 | Unit tests | `#[cfg(test)]` modules next to the code (`config/mod.rs`, `util.rs`, `engine/distrobox.rs`, `sshd/mod.rs`, `host/pty.rs`) | Pure logic: INI merging, shell quoting, SSH-config block insert/remove, pty size clamping | No |
-| CLI black-box tests | `tests/cli.rs` | `dev-box config`, `dev-box up --dry-run`, argument validation -- spawns the real binary, never touches Distrobox | No |
+| CLI black-box tests | `tests/cli.rs` | `dbx config`, `dbx up --dry-run`, argument validation -- spawns the real binary, never touches Distrobox | No |
 | Integration tests | `tests/distrobox_integration.rs` (`#[ignore]`d by default) | Real `up`/`list`/`rm` round-trip, including the `~/.ssh/*` side effects | Yes |
 
 Run everything hermetic with `cargo test`. Run the real thing with
@@ -314,7 +314,7 @@ Ubuntu runner, separately from the platform matrix that gates merges.
 
 ## Non-goals (for now)
 
-- **No daemon.** Every command is a fresh process. If dev-box ever needs persistent
+- **No daemon.** Every command is a fresh process. If dbx ever needs persistent
   state beyond `~/.ssh/config`, that's a deliberate architecture change, not an
   incremental one.
 - **No plugin system.** Both `HostTransport` and `ContainerEngine` are closed sets of

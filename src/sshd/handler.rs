@@ -1,4 +1,4 @@
-//! The `russh` server `Handler` implementation that backs `dev-box
+//! The `russh` server `Handler` implementation that backs `dbx
 //! ssh-proxy`.
 //!
 //! Authentication is handled entirely by accepting the SSH `"none"`
@@ -6,7 +6,7 @@
 //! `"none"` automatically before trying any key or password -- by
 //! accepting it unconditionally, no key or password is ever requested at
 //! all. This is safe here specifically because the transport is never a
-//! real network socket: `dev-box ssh-proxy` is only ever reachable by
+//! real network socket: `dbx ssh-proxy` is only ever reachable by
 //! spawning it locally (via `ProxyCommand`), which already requires the
 //! same OS-level access needed to run `distrobox` directly.
 //!
@@ -59,22 +59,34 @@ enum ChildState {
     },
 }
 
-pub struct DevBoxHandler {
+pub struct DbxHandler {
     pub host: Arc<dyn HostTransport>,
-    /// Stored as `Arc<dyn ContainerEngine>` so the SSH handler is decoupled
-    /// from `DistroboxEngine` specifically and works with any future backend.
     pub engine: Arc<dyn ContainerEngine>,
     pub box_name: Arc<str>,
     pub forwarded_env: Vec<(String, String)>,
     pub work_dir: Option<String>,
-    pub children: HashMap<ChannelId, ChildState>,
-    /// Records the size from a `pty_request` until the following
-    /// `shell_request`/`exec_request` consumes it and decides whether to
-    /// spawn via `spawn_child_pty` instead of `spawn_child`.
-    pub pending_pty: HashMap<ChannelId, PtySize>,
+    children: HashMap<ChannelId, ChildState>,
+    pending_pty: HashMap<ChannelId, PtySize>,
 }
 
-impl DevBoxHandler {
+impl DbxHandler {
+    pub fn new(
+        host: Arc<dyn HostTransport>,
+        engine: Arc<dyn ContainerEngine>,
+        box_name: Arc<str>,
+        forwarded_env: Vec<(String, String)>,
+        work_dir: Option<String>,
+    ) -> Self {
+        Self {
+            host,
+            engine,
+            box_name,
+            forwarded_env,
+            work_dir,
+            children: HashMap::new(),
+            pending_pty: HashMap::new(),
+        }
+    }
     /// Spawns `script` via the host transport (plain pipes) and wires its
     /// stdio to `channel`: stdout/stderr are streamed back to the client
     /// as they arrive, and the channel is closed with the child's exit
@@ -237,7 +249,7 @@ impl DevBoxHandler {
     }
 }
 
-impl Handler for DevBoxHandler {
+impl Handler for DbxHandler {
     type Error = anyhow::Error;
 
     async fn auth_none(&mut self, _user: &str) -> Result<Auth, Self::Error> {
@@ -416,3 +428,7 @@ impl Handler for DevBoxHandler {
         Ok(())
     }
 }
+
+/// Backward-compatible alias for `DbxHandler`.
+#[allow(dead_code)]
+pub type DevBoxHandler = DbxHandler;

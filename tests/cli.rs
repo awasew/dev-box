@@ -1,6 +1,6 @@
 //! Fast, hermetic black-box CLI tests.
 //!
-//! These spawn the real `dev-box` binary (via Cargo's `CARGO_BIN_EXE_*`
+//! These spawn the real `dbx` binary (via Cargo's `CARGO_BIN_EXE_*`
 //! env var) and only exercise code paths that never touch an external
 //! container runtime -- `config`, `up --dry-run`, and argument
 //! validation -- so they run everywhere `cargo test` runs, with no
@@ -13,14 +13,14 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn bin() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_dev-box"))
+    Command::new(env!("CARGO_BIN_EXE_dbx"))
 }
 
 /// Creates a fresh, uniquely-named temp directory for a test to use as
 /// its working directory, so parallel tests never collide.
 fn unique_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
-        "dev-box-clitest-{name}-{}-{:?}",
+        "dbx-clitest-{name}-{}-{:?}",
         std::process::id(),
         std::thread::current().id()
     ));
@@ -31,7 +31,7 @@ fn unique_dir(name: &str) -> PathBuf {
 
 #[test]
 fn help_lists_all_subcommands() {
-    let output = bin().arg("--help").output().expect("run dev-box --help");
+    let output = bin().arg("--help").output().expect("run dbx --help");
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     for cmd in ["up", "enter", "sync", "list", "stop", "rm", "config"] {
@@ -46,16 +46,16 @@ fn help_lists_all_subcommands() {
 fn config_merges_layers_and_prints_ini() {
     let dir = unique_dir("config");
     std::fs::write(
-        dir.join("devbox.ini"),
+        dir.join("dbx.ini"),
         "[dev-environment]\nname = \"cli-test-box\"\nimage = \"ubuntu:24.04\"\n",
     )
-    .expect("write devbox.ini");
+    .expect("write dbx.ini");
 
     let output = bin()
         .arg("config")
         .current_dir(&dir)
         .output()
-        .expect("run dev-box config");
+        .expect("run dbx config");
     assert!(
         output.status.success(),
         "stderr: {}",
@@ -86,7 +86,7 @@ fn config_merges_project_and_local_layers_with_local_winning() {
         .arg("config")
         .current_dir(&dir)
         .output()
-        .expect("run dev-box config");
+        .expect("run dbx config");
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     // Scalar key: the local layer overrides the project layer.
@@ -112,7 +112,7 @@ fn up_dry_run_prints_merged_config_without_touching_containers() {
         .arg("--dry-run")
         .current_dir(&dir)
         .output()
-        .expect("run dev-box up --dry-run");
+        .expect("run dbx up --dry-run");
     assert!(
         output.status.success(),
         "stderr: {}",
@@ -134,7 +134,7 @@ fn up_without_a_box_name_fails_with_a_clear_error() {
         .arg("up")
         .current_dir(&dir)
         .output()
-        .expect("run dev-box up");
+        .expect("run dbx up");
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr).to_lowercase();
     assert!(stderr.contains("name"), "unexpected stderr: {stderr}");
@@ -150,7 +150,7 @@ fn rm_without_a_box_name_or_config_fails_with_a_clear_error() {
         .arg("--force")
         .current_dir(&dir)
         .output()
-        .expect("run dev-box rm");
+        .expect("run dbx rm");
     assert!(!output.status.success());
 
     let _ = std::fs::remove_dir_all(&dir);

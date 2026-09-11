@@ -1,6 +1,6 @@
-# Growth & Outreach Strategy for dev-box
+# Growth & Outreach Strategy for dbx
 
-This document outlines the strategic initiatives to grow dev-box from a niche alpha project to a widely-adopted developer tool.
+This document outlines the strategic initiatives to grow dbx from a niche alpha project to a widely-adopted developer tool.
 
 ## Current Status
 - **5 stars** (day 1)

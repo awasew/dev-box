@@ -1,15 +1,15 @@
-# GitHub Pages configuration for dev-box
+# GitHub Pages configuration for dbx
 
 # Site settings
-title: dev-box
+title: dbx
 tagline: "IDE-independent developer environments with keyless SSH, native filesystem performance, and zero vendor lock-in."
 description: "A lightweight, single-binary Rust orchestrator for reproducible developer environments on any platform — without vendor lock-in, without SSH key setup, and with 5-10x faster builds on macOS/Windows."
 url: "https://srikanthrayudu.github.io"
-baseurl: "/dev-box"
+baseurl: "/dbx"
 
 # Repository
-repository: srikanthrayudu/dev-box
-github_url: "https://github.com/srikanthrayudu/dev-box"
+repository: srikanthrayudu/dbx
+github_url: "https://github.com/srikanthrayudu/dbx"
 
 # Author
 author:
@@ -25,10 +25,10 @@ twitter:
   username: srikanthrayudu
   card: summary_large_image
 social:
-  name: dev-box
+  name: dbx
   links:
-    - "https://github.com/srikanthrayudu/dev-box"
-    - "https://github.com/srikanthrayudu/dev-box/discussions"
+    - "https://github.com/srikanthrayudu/dbx"
+    - "https://github.com/srikanthrayudu/dbx/discussions"
     - "https://linkedin.com/in/srikanthrayudu"
     - "https://twitter.com/srikanthrayudu"
 

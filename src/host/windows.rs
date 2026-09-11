@@ -1,7 +1,7 @@
 use super::HostTransport;
 use anyhow::{bail, Result};
 
-/// Windows can't run Linux containers natively, so dev-box bridges into
+/// Windows can't run Linux containers natively, so dbx bridges into
 /// WSL2, where distrobox and its backend (Podman/Docker) actually run.
 pub struct WindowsHost;
 
@@ -9,7 +9,7 @@ pub struct WindowsHost;
 /// rather than letting the spawned command produce a confusing error.
 fn require_wsl() -> Result<()> {
     if which::which("wsl.exe").is_err() {
-        bail!("dev-box requires WSL2 on Windows. Install it with `wsl --install` and try again.");
+        bail!("dbx requires WSL2 on Windows. Install it with `wsl --install` and try again.");
     }
     Ok(())
 }

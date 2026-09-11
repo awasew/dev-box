@@ -55,7 +55,7 @@ fn main() -> Result<()> {
             eprintln!("==> host: {}", ctx.host.name());
             ctx.engine
                 .assemble(ctx.host.as_ref(), &payload)
-                .map_err(|e| e.context("failed to assemble the dev-box environment"))?;
+                .map_err(|e| e.context("failed to assemble the dbx environment"))?;
 
             let use_scratchpad = scratchpad || config::is_scratchpad_enabled(&ctx.config);
             if use_scratchpad && cfg!(target_os = "windows") {
@@ -78,7 +78,7 @@ fn main() -> Result<()> {
             sshd::install_client_config(&box_name, &abs_layers)
                 .map_err(|e| e.context("failed to update the local SSH client configuration"))?;
 
-            eprintln!("==> dev-box environment is ready");
+            eprintln!("==> dbx environment is ready");
             eprintln!("==> connect with: ssh {box_name}");
         }
 
@@ -135,7 +135,7 @@ fn main() -> Result<()> {
         Command::List => {
             ctx.engine
                 .list(ctx.host.as_ref())
-                .map_err(|e| e.context("failed to list dev-box environments"))?;
+                .map_err(|e| e.context("failed to list dbx environments"))?;
         }
 
         Command::Stop { name } => {
@@ -145,7 +145,7 @@ fn main() -> Result<()> {
                     e.context("no box name given and no [dev-environment] name= found in config")
                 })?,
             };
-            eprintln!("==> stopping dev-box environment: {box_name}");
+            eprintln!("==> stopping dbx environment: {box_name}");
             ctx.engine
                 .stop(ctx.host.as_ref(), &box_name)
                 .map_err(|e| e.context(format!("failed to stop {box_name}")))?;
@@ -158,7 +158,7 @@ fn main() -> Result<()> {
                     e.context("no box name given and no [dev-environment] name= found in config")
                 })?,
             };
-            eprintln!("==> removing dev-box environment: {box_name}");
+            eprintln!("==> removing dbx environment: {box_name}");
             ctx.engine
                 .rm(ctx.host.as_ref(), &box_name, force)
                 .map_err(|e| e.context(format!("failed to remove {box_name}")))?;

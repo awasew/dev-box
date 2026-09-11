@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "dev-box",
+    name = "dbx",
     author,
     version,
     about = "A fast, IDE-independent developer environment orchestrator built on Distrobox",
@@ -11,7 +11,7 @@ use std::path::PathBuf;
 )]
 pub struct Cli {
     /// Explicit configuration layers to merge, in order (lowest to highest priority).
-    /// Defaults to: ~/.config/dev-box/global.ini -> ./devbox.ini -> ./devbox.local.ini
+    /// Defaults to: ~/.config/dbx/global.ini -> ./dbx.ini -> ./dbx.local.ini
     #[arg(short = 'c', long = "config", global = true)]
     pub config: Vec<PathBuf>,
 
@@ -25,7 +25,7 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    /// Merge configuration layers and create/update the dev-box environment.
+    /// Merge configuration layers and create/update the dbx environment.
     #[command(alias = "create")]
     Up {
         #[arg(long)]
@@ -34,7 +34,7 @@ pub enum Command {
         #[arg(long)]
         scratchpad: bool,
     },
-    /// Enter an already-created dev-box environment.
+    /// Enter an already-created dbx environment.
     Enter {
         name: Option<String>,
         /// On Windows, enter inside the high-speed WSL2 ext4 scratchpad workspace.
@@ -49,15 +49,15 @@ pub enum Command {
         #[arg(short, long)]
         reverse: bool,
     },
-    /// List all existing dev-box / distrobox containers.
+    /// List all existing dbx / distrobox containers.
     #[command(alias = "ls")]
     List,
-    /// Stop a running dev-box environment.
+    /// Stop a running dbx environment.
     Stop {
         /// Name of the box to stop (defaults to [dev-environment] name from config).
         name: Option<String>,
     },
-    /// Remove a dev-box environment.
+    /// Remove a dbx environment.
     #[command(alias = "delete")]
     Rm {
         /// Name of the box to remove (defaults to [dev-environment] name from config).
@@ -70,7 +70,7 @@ pub enum Command {
     Config,
     /// Internal: runs sshd in inetd mode inside a box, speaking raw SSH
     /// protocol over stdin/stdout. This is meant to be used as an SSH
-    /// `ProxyCommand` target (dev-box wires it up automatically) -- you
+    /// `ProxyCommand` target (dbx wires it up automatically) -- you
     /// shouldn't need to run this directly.
     #[command(hide = true)]
     SshProxy { name: String },

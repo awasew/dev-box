@@ -8,10 +8,10 @@ fn shell_quote(s: &str) -> String {
 }
 
 /// Returns the scratchpad path inside WSL2 for `box_name`.
-/// Stored in `/tmp/dev-box/scratchpads/<box_name>` on native Linux ext4/tmpfs
+/// Stored in `/tmp/dbx/scratchpads/<box_name>` on native Linux ext4/tmpfs
 /// to achieve 100% native Linux I/O performance.
 pub fn scratchpad_path(box_name: &str) -> String {
-    format!("/tmp/dev-box/scratchpads/{box_name}")
+    format!("/tmp/dbx/scratchpads/{box_name}")
 }
 
 /// Translates a Windows path (e.g. `C:\Users\foo\project`) to a WSL path

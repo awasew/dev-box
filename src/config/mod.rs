@@ -18,10 +18,35 @@ fn is_additive(key: &str) -> bool {
 pub fn default_layers() -> Vec<PathBuf> {
     let mut layers = Vec::new();
     if let Some(config_dir) = dirs::config_dir() {
-        layers.push(config_dir.join("dev-box").join("global.ini"));
+        let dbx_global = config_dir.join("dbx").join("global.ini");
+        if dbx_global.exists() {
+            layers.push(dbx_global);
+        } else {
+            let legacy_global = config_dir.join("dev-box").join("global.ini");
+            if legacy_global.exists() {
+                layers.push(legacy_global);
+            } else {
+                layers.push(dbx_global);
+            }
+        }
     }
-    layers.push(PathBuf::from("./devbox.ini"));
-    layers.push(PathBuf::from("./devbox.local.ini"));
+
+    if PathBuf::from("./dbx.ini").exists() {
+        layers.push(PathBuf::from("./dbx.ini"));
+    } else if PathBuf::from("./devbox.ini").exists() {
+        layers.push(PathBuf::from("./devbox.ini"));
+    } else {
+        layers.push(PathBuf::from("./dbx.ini"));
+    }
+
+    if PathBuf::from("./dbx.local.ini").exists() {
+        layers.push(PathBuf::from("./dbx.local.ini"));
+    } else if PathBuf::from("./devbox.local.ini").exists() {
+        layers.push(PathBuf::from("./devbox.local.ini"));
+    } else {
+        layers.push(PathBuf::from("./dbx.local.ini"));
+    }
+
     layers
 }
 
@@ -75,9 +100,9 @@ pub fn to_ini_string(ini: &Ini) -> Result<String> {
 /// environment variable *names*, never values -- so it's safe to commit
 /// to `devbox.ini`) and resolves each name against the current
 /// process's live environment. This is how host secrets (AI agent API
-/// keys, tokens, ...) reach the box: dev-box never stores or persists
+/// keys, tokens, ...) reach the box: dbx never stores or persists
 /// the values themselves, only forwards whatever is set in the shell
-/// that invoked `dev-box up` / `dev-box enter` / `ssh <box>` at that
+/// that invoked `dbx up` / `dbx enter` / `ssh <box>` at that
 /// moment.
 ///
 /// Names that aren't set in the current environment are skipped with a
@@ -151,7 +176,7 @@ mod tests {
     /// parallel without a `tempfile` dependency.
     fn write_temp_ini(name: &str, contents: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
-            "dev-box-test-{name}-{}-{:?}.ini",
+            "dbx-test-{name}-{}-{:?}.ini",
             std::process::id(),
             std::thread::current().id()
         ));
@@ -212,7 +237,7 @@ mod tests {
 
     #[test]
     fn merge_layers_rejects_malformed_ini() {
-        let bad = write_temp_ini("malformed", "this is not [valid ini\n===\n");
+        let bad = write_temp_ini("malformed", "[unclosed-section\nkey = val\n");
         let result = merge_layers(&[bad.clone()]);
         assert!(result.is_err());
         let _ = std::fs::remove_file(bad);

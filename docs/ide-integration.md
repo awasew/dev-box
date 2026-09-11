@@ -1,9 +1,9 @@
 # IDE Integration & Keyless SSH Guide
 
 > [!NOTE]
-> **Development Stage (Alpha)**: `dev-box` is in active development. While keyless SSH proxying and IDE attachments work with standard Remote-SSH clients, flags and configurations are subject to iteration before v1.0.
+> **Development Stage (Alpha)**: `dbx` is in active development. While keyless SSH proxying and IDE attachments work with standard Remote-SSH clients, flags and configurations are subject to iteration before v1.0.
 
-**dev-box** automates the container developer experience without requiring proprietary extensions (like Microsoft's Dev Containers extension), Docker Desktop, or running a bloated SSH daemon inside your container.
+**dbx** automates the container developer experience without requiring proprietary extensions (like Microsoft's Dev Containers extension), Docker Desktop, or running a bloated SSH daemon inside your container.
 
 Any editor or IDE that supports remote development over SSH connects seamlessly.
 
@@ -11,26 +11,26 @@ Any editor or IDE that supports remote development over SSH connects seamlessly.
 
 ## 1. How It Works: The Keyless SSH Proxy
 
-When you run `dev-box up`:
+When you run `dbx up`:
 1. Distrobox builds/updates your container from your layered INI configuration.
-2. `dev-box` automatically adds an `Include dev-box_config` directive to `~/.ssh/config` and manages an isolated block in `~/.ssh/dev-box_config`:
+2. `dbx` automatically adds an `Include dbx_config` directive to `~/.ssh/config` and manages an isolated block in `~/.ssh/dbx_config`:
 
 ```sshconfig
-# >>> dev-box: my-project-dev >>>
+# >>> dbx: my-project-dev >>>
 Host my-project-dev
-    ProxyCommand "path/to/dev-box" -c "path/to/devbox.ini" ssh-proxy my-project-dev
+    ProxyCommand "path/to/dbx" -c "path/to/dbx.ini" ssh-proxy my-project-dev
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
     BatchMode yes
     LogLevel ERROR
-# <<< dev-box: my-project-dev <<<
+# <<< dbx: my-project-dev <<<
 ```
 
 ### Why There Are Zero Credentials or Keys
 When your IDE or command line runs `ssh my-project-dev`:
-- OpenSSH invokes `dev-box ssh-proxy my-project-dev` as a subprocess (`ProxyCommand`).
-- `dev-box` embeds a minimal SSH server (`russh`) that speaks the SSH protocol directly over standard input/output (`stdio`).
-- OpenSSH automatically probes with the standard SSH `"none"` authentication method. `dev-box` accepts `"none"` unconditionally.
+- OpenSSH invokes `dbx ssh-proxy my-project-dev` as a subprocess (`ProxyCommand`).
+- `dbx` embeds a minimal SSH server (`russh`) that speaks the SSH protocol directly over standard input/output (`stdio`).
+- OpenSSH automatically probes with the standard SSH `"none"` authentication method. `dbx` accepts `"none"` unconditionally.
 - **Safety guarantee**: There is no TCP port, no open network socket, and no remote access. The proxy can only be executed by your local user account.
 - **Container hygiene**: Nothing is installed inside your container (`sshd` is not installed, no keys are generated or stored on disk). The proxy simply spawns `distrobox enter <box>` and pipes stdio into the SSH channel.
 
@@ -51,7 +51,7 @@ When your IDE or command line runs `ssh my-project-dev`:
    - **Linux**: `/home/<user>/projects/<repo>`
    - **macOS**: `/Users/<user>/projects/<repo>`
    - **Windows (standard)**: `/mnt/c/Users/<user>/...`
-   - **Windows (scratchpad)**: `/tmp/dev-box/scratchpads/<box_name>`
+   - **Windows (scratchpad)**: `/tmp/dbx/scratchpads/<box_name>`
 
 #### Command Line Shortcut
 You can open VS Code directly attached to your box from your terminal:
@@ -121,12 +121,12 @@ Any tool or web server running inside your container (e.g., a web server on `htt
 
 ## 4. Lifecycle Cleanup
 
-When you delete a container with `dev-box rm`:
+When you delete a container with `dbx rm`:
 ```sh
-dev-box rm
+dbx rm
 ```
-`dev-box` automatically:
+`dbx` automatically:
 1. Stops and removes the Distrobox container.
-2. Removes the `Host <box_name>` block from `~/.ssh/dev-box_config`.
+2. Removes the `Host <box_name>` block from `~/.ssh/dbx_config`.
 3. Cleans up any ext4 scratchpad directories in WSL2.
 No dangling SSH config entries or orphaned volumes are left behind.

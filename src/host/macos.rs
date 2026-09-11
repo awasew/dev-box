@@ -1,7 +1,7 @@
 use super::HostTransport;
 use anyhow::{bail, Result};
 
-/// macOS can't run Linux containers natively, so dev-box bridges into a
+/// macOS can't run Linux containers natively, so dbx bridges into a
 /// lightweight Linux VM: Podman Machine (preferred) or Lima as a fallback.
 pub enum MacHost {
     PodmanMachine,
@@ -20,7 +20,7 @@ impl MacHost {
             eprintln!(
                 "==> warning: neither `podman` nor `limactl` was found. \
                  Install Podman Machine (https://podman.io) or Lima (https://lima-vm.io) \
-                 before running `dev-box up`."
+                 before running `dbx up`."
             );
             // Default to Podman Machine; `command_parts` will surface the
             // install error if the user proceeds without fixing it.

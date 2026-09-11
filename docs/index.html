@@ -4,14 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>dev-box - IDE-Independent Developer Environments</title>
+    <title>dbx - IDE-Independent Developer Environments</title>
     <meta name="description"
         content="Lightweight, cross-platform developer environments with keyless SSH and native filesystem performance.">
     <meta name="keywords" content="dev-containers, distrobox, rust, developer-tools, ssh, cross-platform">
-    <meta name="og:title" content="dev-box - Break Free from VS Code Dev Containers">
+    <meta name="og:title" content="dbx - Break Free from VS Code Dev Containers">
     <meta name="og:description"
         content="IDE-independent dev environments without vendor lock-in. Keyless SSH. 5-10x faster builds.">
-    <meta name="og:image" content="https://raw.githubusercontent.com/srikanthrayudu/dev-box/main/docs/images/hero.png">
+    <meta name="og:image" content="https://raw.githubusercontent.com/srikanthrayudu/dbx/main/docs/images/hero.png">
     <style>
         * {
             margin: 0;
@@ -419,13 +419,13 @@
 <body>
     <header>
         <div class="container">
-            <div class="logo">🐚 dev-box</div>
+            <div class="logo">🐚 dbx</div>
             <nav>
                 <a href="#features">Features</a>
                 <a href="#comparison">Compare</a>
                 <a href="#quickstart">Get Started</a>
                 <a href="#community">Community</a>
-                <a href="https://github.com/srikanthrayudu/dev-box" target="_blank">GitHub</a>
+                <a href="https://github.com/srikanthrayudu/dbx" target="_blank">GitHub</a>
             </nav>
         </div>
     </header>
@@ -437,14 +437,14 @@
                 Zed, Emacs.</p>
             <div class="cta-buttons">
                 <a href="#quickstart" class="btn btn-primary">Get Started</a>
-                <a href="https://github.com/srikanthrayudu/dev-box" class="btn btn-secondary">View on GitHub</a>
+                <a href="https://github.com/srikanthrayudu/dbx" class="btn btn-secondary">View on GitHub</a>
             </div>
         </div>
     </section>
 
     <section class="features" id="features">
         <div class="container">
-            <h2>Why dev-box?</h2>
+            <h2>Why dbx?</h2>
             <div class="feature-grid">
                 <div class="feature-card">
                     <h3>🎯 IDE-Independent</h3>
@@ -461,7 +461,7 @@
                 </div>
                 <div class="feature-card">
                     <h3>🖥️ Cross-Platform</h3>
-                    <p>Single devbox.ini config works on Linux, macOS, and Windows. No OS-specific branching.</p>
+                    <p>Single dbx.ini config works on Linux, macOS, and Windows. No OS-specific branching.</p>
                 </div>
                 <div class="feature-card">
                     <h3>🧩 Layered Config</h3>
@@ -478,12 +478,12 @@
 
     <section class="comparison" id="comparison">
         <div class="container">
-            <h2>How dev-box Compares</h2>
+            <h2>How dbx Compares</h2>
             <table class="comparison-table">
                 <thead>
                     <tr>
                         <th>Feature</th>
-                        <th>dev-box</th>
+                        <th>dbx</th>
                         <th>VS Code Dev Containers</th>
                         <th>Nix devshell</th>
                         <th>devenv.sh</th>
@@ -537,39 +537,44 @@
             <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">1. Install</h3>
             <div class="code-block">
                 <span class="comment"># Via cargo (for Rust developers)</span>
-                cargo install dev-box
+                cargo install dbx
 
                 <span class="comment"># Or download pre-built binary from</span>
-                <span class="comment"># https://github.com/srikanthrayudu/dev-box/releases</span>
+                <span class="comment"># https://github.com/srikanthrayudu/dbx/releases</span>
             </div>
 
             <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">2. Create Config</h3>
             <div class="code-block">
-                cat > devbox.ini << 'EOF' [dev-environment] name="my-dev" image="ubuntu:24.04"
-                    additional_packages="git curl build-essential" EOF </div>
-
-                    <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">3. Boot Environment</h3>
-                    <div class="code-block">
-                        dev-box up
-                    </div>
-
-                    <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">4. Connect from Your IDE</h3>
-                    <div class="code-block">
-                        <span class="comment"># Plain SSH</span>
-                        ssh my-dev
-
-                        <span class="comment"># Or use VS Code Remote-SSH, JetBrains Gateway, etc.</span>
-                    </div>
-
-                    <p style="text-align: center; margin-top: 30px; color: #666;">
-                        ✅ No SSH keys generated. No setup inside the box. Works on Linux, macOS, Windows.
-                    </p>
+                cat > dbx.ini << 'EOF'
+[dev-environment]
+name = "my-dev"
+image = "ubuntu:24.04"
+additional_packages = "git curl build-essential"
+EOF
             </div>
+
+            <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">3. Boot Environment</h3>
+            <div class="code-block">
+                dbx up
+            </div>
+
+            <h3 style="margin-top: 40px; margin-bottom: 20px; color: #333;">4. Connect from Your IDE</h3>
+            <div class="code-block">
+                <span class="comment"># Plain SSH</span>
+                ssh my-dev
+
+                <span class="comment"># Or use VS Code Remote-SSH, JetBrains Gateway, etc.</span>
+            </div>
+
+            <p style="text-align: center; margin-top: 30px; color: #666;">
+                ✅ No SSH keys generated. No setup inside the box. Works on Linux, macOS, Windows.
+            </p>
+        </div>
     </section>
 
     <section class="stats">
         <div class="container">
-            <h2 style="color: white; margin-bottom: 20px;">Why Developers Choose dev-box</h2>
+            <h2 style="color: white; margin-bottom: 20px;">Why Developers Choose dbx</h2>
             <div class="stats-grid">
                 <div class="stat">
                     <div class="stat-number">2MB</div>
@@ -596,13 +601,13 @@
             <h2>Join the Community</h2>
             <p>Have questions? Found a bug? Want to contribute? Let's build together.</p>
             <div class="social-links">
-                <a href="https://github.com/srikanthrayudu/dev-box" class="social-link" target="_blank">
+                <a href="https://github.com/srikanthrayudu/dbx" class="social-link" target="_blank">
                     ⭐ GitHub
                 </a>
-                <a href="https://github.com/srikanthrayudu/dev-box/discussions" class="social-link" target="_blank">
+                <a href="https://github.com/srikanthrayudu/dbx/discussions" class="social-link" target="_blank">
                     💬 Discussions
                 </a>
-                <a href="https://github.com/srikanthrayudu/dev-box/issues" class="social-link" target="_blank">
+                <a href="https://github.com/srikanthrayudu/dbx/issues" class="social-link" target="_blank">
                     🐛 Issues
                 </a>
                 <a href="https://linkedin.com/in/srikanthrayudu" class="social-link" target="_blank">
@@ -616,12 +621,12 @@
         <div class="container">
             <p>Built with ❤️ in Rust | MIT Licensed | No Vendor Lock-in</p>
             <div class="footer-links">
-                <a href="https://github.com/srikanthrayudu/dev-box">GitHub</a>
-                <a href="https://github.com/srikanthrayudu/dev-box/blob/main/README.md">Full Documentation</a>
-                <a href="https://github.com/srikanthrayudu/dev-box/blob/main/CONTRIBUTING.md">Contributing</a>
-                <a href="https://github.com/srikanthrayudu/dev-box/blob/main/LICENSE">License</a>
+                <a href="https://github.com/srikanthrayudu/dbx">GitHub</a>
+                <a href="https://github.com/srikanthrayudu/dbx/blob/main/README.md">Full Documentation</a>
+                <a href="https://github.com/srikanthrayudu/dbx/blob/main/CONTRIBUTING.md">Contributing</a>
+                <a href="https://github.com/srikanthrayudu/dbx/blob/main/LICENSE">License</a>
             </div>
-            <p style="margin-top: 20px; opacity: 0.7;">© 2026 dev-box. All rights reserved.</p>
+            <p style="margin-top: 20px; opacity: 0.7;">© 2026 dbx. All rights reserved.</p>
         </div>
     </footer>
 </body>

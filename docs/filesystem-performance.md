@@ -1,12 +1,12 @@
 # Filesystem Performance & Cross-Boundary I/O (Windows / WSL2)
 
-When developing inside Linux containers on Windows, filesystem performance is one of the most critical factors affecting developer experience. This document explains the root cause of cross-filesystem performance bottlenecks, how Microsoft's **VS Code Dev Containers** addresses the issue, and best practices and architectural solutions for **dev-box**.
+When developing inside Linux containers on Windows, filesystem performance is one of the most critical factors affecting developer experience. This document explains the root cause of cross-filesystem performance bottlenecks, how Microsoft's **VS Code Dev Containers** addresses the issue, and best practices and architectural solutions for **dbx**.
 
 ---
 
 ## 1. The Root Cause: The Cross-Filesystem Penalty
 
-On Windows, `dev-box` uses WSL2 (Windows Subsystem for Linux) to run Distrobox and Podman/Docker.
+On Windows, `dbx` uses WSL2 (Windows Subsystem for Linux) to run Distrobox and Podman/Docker.
 
 ### The Slow Path (`/mnt/c/...`)
 
@@ -80,9 +80,9 @@ In `devcontainer.json`, developers can isolate heavy write directories (`node_mo
 
 ---
 
-## 3. The dev-box Solution: Native WSL2 Ext4 / RAM Scratchpad Sync
+## 3. The dbx Solution: Native WSL2 Ext4 / RAM Scratchpad Sync
 
-To give developers the best of both worlds—**editing natively on Windows with Windows tools** while compiling at **100% native Linux ext4 speed**—dev-box provides a built-in **Scratchpad Sync** layer.
+To give developers the best of both worlds—**editing natively on Windows with Windows tools** while compiling at **100% native Linux ext4 speed**—dbx provides a built-in **Scratchpad Sync** layer.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -95,7 +95,7 @@ To give developers the best of both worlds—**editing natively on Windows with 
                                │
 ┌──────────────────────────────▼──────────────────────────────┐
 │                NATIVE WSL EXT4 RAM/RAMDISK                  │
-│  `/tmp/dev-box/scratchpads/<box_name>/`                     │
+│  `/tmp/dbx/scratchpads/<box_name>/`                         │
 │  • Primary workspace for Distrobox container                │
 │  • Compiles at NATIVE 100% Linux ext4 speed                 │
 └─────────────────────────────────────────────────────────────┘
@@ -104,26 +104,26 @@ To give developers the best of both worlds—**editing natively on Windows with 
 ### How It Works
 
 1. **Host-to-Scratchpad Sync**:
-   When you run `dev-box enter --scratchpad` (or declare `scratchpad = true` in `devbox.ini`), dev-box uses WSL's native `rsync` to mirror your project files into `/tmp/dev-box/scratchpads/<box_name>` on native Linux ext4/tmpfs.
+   When you run `dbx enter --scratchpad` (or declare `scratchpad = true` in `dbx.ini`), dbx uses WSL's native `rsync` to mirror your project files into `/tmp/dbx/scratchpads/<box_name>` on native Linux ext4/tmpfs.
 2. **Automatic `.gitignore` & Artifact Isolation**:
    `rsync` automatically respects your `.gitignore` (`--filter=':- .gitignore'`) and excludes heavy build outputs (`target/`, `node_modules/`, `.git/`). Heavy compile artifacts stay 100% inside Linux ext4 and are never translated across 9P.
 3. **Container Runs in Native Storage**:
-   Distrobox enters directly into the scratchpad directory (`cd /tmp/dev-box/scratchpads/<box_name> && distrobox enter <box_name>`).
+   Distrobox enters directly into the scratchpad directory (`cd /tmp/dbx/scratchpads/<box_name> && distrobox enter <box_name>`).
 4. **Reverse Sync on Exit**:
-   When you exit the session, dev-box automatically runs `rsync -au` to sync any updated source files (e.g. updated `Cargo.lock`, code generators, auto-fixes) back to your Windows `C:\` directory while preserving newer host edits.
+   When you exit the session, dbx automatically runs `rsync -au` to sync any updated source files (e.g. updated `Cargo.lock`, code generators, auto-fixes) back to your Windows `C:\` directory while preserving newer host edits.
 5. **Manual / On-Demand Sync**:
    You can manually sync at any time:
    ```sh
    # Push Windows host changes to WSL scratchpad:
-   dev-box sync
+   dbx sync
 
    # Pull WSL scratchpad changes back to Windows host:
-   dev-box sync --reverse
+   dbx sync --reverse
    ```
 
 ### Enabling Scratchpad in Configuration
 
-Add `scratchpad = true` to `devbox.ini`:
+Add `scratchpad = true` to `dbx.ini`:
 
 ```ini
 [dev-environment]
@@ -172,14 +172,14 @@ While VirtioFS on modern macOS (macOS 13+ with Apple Virtualization) is substant
 
 ---
 
-## 5. Comparison: dev-box Scratchpad vs Docker Named Volumes
+## 5. Comparison: dbx Scratchpad vs Docker Named Volumes
 
-| Feature | Docker Named Volume / Dev Container | dev-box WSL / VM Ext4 Scratchpad |
+| Feature | Docker Named Volume / Dev Container | dbx WSL / VM Ext4 Scratchpad |
 | :--- | :--- | :--- |
 | **I/O Speed (`cargo build`, `npm`)** | Fast (Native ext4) | **Fast (Native ext4 / RAM)** |
 | **Host Tooling Access** | **Restricted / Opaque** (Files locked inside Docker VHDX) | **Full Access** (Source code lives natively on host `C:\` or `/Users/`) |
 | **Build Artifact Isolation** | Hard to inspect (buried in VM disk) | **Explicit & Clean** (`target/`, `node_modules/` stay isolated in VM) |
 | **System Resource Usage** | **Heavy** (Docker Desktop VM daemon overhead) | **Lightweight** (Direct kernel syscalls, <2ms startup) |
-| **Clean Up Lifecycle** | Manual (`docker volume prune`) | **Automatic on `dev-box rm`** |
+| **Clean Up Lifecycle** | Manual (`docker volume prune`) | **Automatic on `dbx rm`** |
 
 

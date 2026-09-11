@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Initial alpha release of dev-box
+- Initial alpha release of dbx
 - IDE-independent developer environments on Distrobox
 - Keyless SSH authentication (no keys generated, no sshd in container)
 - Cross-platform configuration (Linux, macOS, Windows)
@@ -24,13 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   work correctly over `ssh <box>` (falls back to plain pipes for
   non-interactive/scripted sessions, matching OpenSSH semantics)
 - Cross-process file locking around `~/.ssh/config` /
-  `~/.ssh/dev-box_config` writes, so concurrent `dev-box` invocations for
+  `~/.ssh/dbx_config` writes, so concurrent `dbx` invocations for
   different boxes can't interleave and corrupt either file
 
 ### Documentation
 - Architecture and design overview (`docs/architecture.md`), with diagrams
   covering the `HostTransport`/`ContainerEngine` split, config layering,
-  and the `dev-box up` / interactive `ssh <box>` control flow
+  and the `dbx up` / interactive `ssh <box>` control flow
 - IDE Integration Guide (VS Code, Cursor, JetBrains Gateway, Zed, Neovim)
 - Filesystem Performance Guide (benchmarks and optimization tips)
 - Configuration layering documentation

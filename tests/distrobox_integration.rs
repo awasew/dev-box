@@ -13,8 +13,8 @@
 //! CI runs this in a dedicated job that installs Distrobox + Podman
 //! first (see `.github/workflows/ci.yml`'s `integration` job).
 //!
-//! **Warning**: these tests genuinely run `dev-box up`/`dev-box rm`,
-//! which modify the real `~/.ssh/config` and `~/.ssh/dev-box_config` on
+//! **Warning**: these tests genuinely run `dbx up`/`dbx rm`,
+//! which modify the real `~/.ssh/config` and `~/.ssh/dbx_config` on
 //! whatever machine runs them (that side effect is exactly what's being
 //! tested). Only run `--ignored` on a disposable CI runner or a machine
 //! where you're fine with that, never blindly on your daily-driver box.
@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn bin() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_dev-box"))
+    Command::new(env!("CARGO_BIN_EXE_dbx"))
 }
 
 /// Probes for a usable Distrobox installation on whichever host
@@ -46,7 +46,7 @@ fn distrobox_available() -> bool {
 
 fn unique_dir(name: &str) -> PathBuf {
     let dir =
-        std::env::temp_dir().join(format!("dev-box-integration-{name}-{}", std::process::id()));
+        std::env::temp_dir().join(format!("dbx-integration-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("create temp dir");
     dir
@@ -60,43 +60,43 @@ fn up_then_rm_round_trip() {
         return;
     }
 
-    let box_name = format!("dev-box-integration-test-{}", std::process::id());
+    let box_name = format!("dbx-integration-test-{}", std::process::id());
     let dir = unique_dir("roundtrip");
     std::fs::write(
-        dir.join("devbox.ini"),
+        dir.join("dbx.ini"),
         format!("[dev-environment]\nname = \"{box_name}\"\nimage = \"ubuntu:24.04\"\n"),
     )
-    .expect("write devbox.ini");
+    .expect("write dbx.ini");
 
     let up = bin()
         .arg("up")
         .current_dir(&dir)
         .output()
-        .expect("run dev-box up");
+        .expect("run dbx up");
     assert!(
         up.status.success(),
-        "dev-box up failed:\nstdout: {}\nstderr: {}",
+        "dbx up failed:\nstdout: {}\nstderr: {}",
         String::from_utf8_lossy(&up.stdout),
         String::from_utf8_lossy(&up.stderr)
     );
 
-    // `dev-box list` should now show the freshly-assembled box.
+    // `dbx list` should now show the freshly-assembled box.
     let list = bin()
         .arg("list")
         .current_dir(&dir)
         .output()
-        .expect("run dev-box list");
+        .expect("run dbx list");
     assert!(list.status.success());
     assert!(
         String::from_utf8_lossy(&list.stdout).contains(&box_name),
-        "dev-box list did not mention {box_name}"
+        "dbx list did not mention {box_name}"
     );
 
-    // `dev-box up` should have written a managed Host block for this box.
+    // `dbx up` should have written a managed Host block for this box.
     let ssh_config_path = dirs::home_dir()
         .expect("home dir")
         .join(".ssh")
-        .join("dev-box_config");
+        .join("dbx_config");
     let ssh_config_before = std::fs::read_to_string(&ssh_config_path).unwrap_or_default();
     assert!(
         ssh_config_before.contains(&format!("Host {box_name}")),
@@ -110,15 +110,15 @@ fn up_then_rm_round_trip() {
         .arg(&box_name)
         .current_dir(&dir)
         .output()
-        .expect("run dev-box rm");
+        .expect("run dbx rm");
     assert!(
         rm.status.success(),
-        "dev-box rm failed:\nstdout: {}\nstderr: {}",
+        "dbx rm failed:\nstdout: {}\nstderr: {}",
         String::from_utf8_lossy(&rm.stdout),
         String::from_utf8_lossy(&rm.stderr)
     );
 
-    // ...and `dev-box rm` should have cleaned that block back up.
+    // ...and `dbx rm` should have cleaned that block back up.
     let ssh_config_after = std::fs::read_to_string(&ssh_config_path).unwrap_or_default();
     assert!(
         !ssh_config_after.contains(&format!("Host {box_name}")),
@@ -144,7 +144,7 @@ fn list_succeeds_when_distrobox_is_installed() {
         .arg("list")
         .current_dir(&dir)
         .output()
-        .expect("run dev-box list");
+        .expect("run dbx list");
     assert!(
         output.status.success(),
         "stderr: {}",

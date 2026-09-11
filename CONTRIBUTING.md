@@ -1,4 +1,4 @@
-# Contributing to dev-box
+# Contributing to dbx
 
 We're excited you want to contribute! This document will guide you through the process.
 
@@ -19,8 +19,8 @@ Be respectful, inclusive, and constructive. We're all here to build something gr
 
 ```sh
 # Clone the repo
-git clone https://github.com/srikanthrayudu/dev-box
-cd dev-box
+git clone https://github.com/srikanthrayudu/dbx
+cd dbx
 
 # Build and test
 cargo build
@@ -31,7 +31,7 @@ cargo run -- --help
 
 # Build release (optimized)
 cargo build --release
-./target/release/dev-box --help
+./target/release/dbx --help
 ```
 
 ### Project Structure
@@ -69,17 +69,17 @@ touches one of) and walks through adding a new platform or backend step by step.
 
 ### 1. **Report a Bug**
 
-Found something broken? [Open an issue](https://github.com/srikanthrayudu/dev-box/issues) with:
+Found something broken? [Open an issue](https://github.com/srikanthrayudu/dbx/issues) with:
 
 - **Title**: Short, clear description (e.g., "SSH connection fails on macOS with Lima")
 - **Environment**: OS, Rust version, Distrobox version
 - **Reproduction steps**: How to consistently trigger the bug
 - **Expected vs actual**: What should happen, what actually happened
-- **Logs**: Run with `RUST_LOG=debug dev-box <command>` and paste output
+- **Logs**: Run with `RUST_LOG=debug dbx <command>` and paste output
 
 ### 2. **Request a Feature**
 
-Have an idea? [Open a discussion or issue](https://github.com/srikanthrayudu/dev-box/issues) with:
+Have an idea? [Open a discussion or issue](https://github.com/srikanthrayudu/dbx/issues) with:
 
 - **Problem statement**: Why you need this
 - **Proposed solution**: Your suggested approach
@@ -124,9 +124,9 @@ cargo clippy -- -D warnings
 cargo test
 
 # Test on your actual system
-./target/debug/dev-box up
-./target/debug/dev-box enter
-./target/debug/dev-box ssh-proxy <box>
+./target/debug/dbx up
+./target/debug/dbx enter
+./target/debug/dbx ssh-proxy <box>
 ```
 
 #### Commit & Push
@@ -154,7 +154,7 @@ git push origin fix/issue-name
 
 ```markdown
 ## Description
-Fixes the issue where `dev-box enter --scratchpad` fails on Windows 11 with WSL2.
+Fixes the issue where `dbx enter --scratchpad` fails on Windows 11 with WSL2.
 
 ## Changes
 - Updated `host/scratchpad.rs` to handle UNC paths correctly
@@ -204,7 +204,7 @@ Fixes the issue where `dev-box enter --scratchpad` fails on Windows 11 with WSL2
 **Good first PR**: Add unit tests for utility functions.
 
 ### 🎨 Examples
-- Create `dev-box-example-go`, `dev-box-example-java`, etc.
+- Create `dbx-example-go`, `dbx-example-java`, etc.
 - Add real-world configuration snippets
 - Showcase special use cases (Jupyter, CUDA, etc.)
 
@@ -258,7 +258,7 @@ pub fn merge_configs(layers: &[&str]) -> Result<Config> {
 
 ## Questions?
 
-- **Discussions**: [GitHub Discussions](https://github.com/srikanthrayudu/dev-box/discussions) for questions and ideas
+- **Discussions**: [GitHub Discussions](https://github.com/srikanthrayudu/dbx/discussions) for questions and ideas
 - **Issues**: Use issues for bugs and feature requests
 - **Twitter**: [@srikanthrayudu](https://twitter.com/srikanthrayudu)
 
@@ -275,4 +275,4 @@ pub fn merge_configs(layers: &[&str]) -> Result<Config> {
 
 ---
 
-**Thanks for contributing!** 🚀 Every PR, issue, and discussion helps dev-box reach more developers.
+**Thanks for contributing!** 🚀 Every PR, issue, and discussion helps dbx reach more developers.

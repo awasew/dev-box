@@ -1,24 +1,21 @@
 //! Cross-platform pseudo-terminal support for the embedded SSH server.
 //!
 //! `portable_pty` (from the wezterm project) provides a pty implementation
-//! on every platform dev-box runs on -- including Windows via ConPTY --
+//! on every platform dbx runs on -- including Windows via ConPTY --
 //! but its API is blocking/thread-based. This module bridges it onto
 //! `tokio` channels so `crate::sshd::handler` can drive it from the async
 //! SSH server without blocking the runtime: a couple of dedicated OS
 //! threads do the actual blocking reads/writes/waits, and hand data
 //! across via channels that are safe to touch from async code.
 //!
-//! Without this, every session spawned by `dev-box ssh-proxy` talks to
+//! Without this, every session spawned by `dbx ssh-proxy` talks to
 //! the box over plain OS pipes (see `HostTransport::spawn_piped`), which
 //! is fine for one-shot commands but means interactive full-screen
 //! programs (vim, htop, ...) and shell job control don't work, since the
 //! remote shell never sees a real controlling terminal.
 
 use anyhow::{Context, Result};
-use portable_pty::{
-    native_pty_system, Child, ChildKiller, CommandBuilder, ExitStatus, MasterPty, PtySystem,
-    SlavePty,
-};
+use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, ExitStatus, MasterPty};
 use std::io::{Read, Write};
 use tokio::sync::mpsc;
 
@@ -147,7 +144,7 @@ mod tests {
 
     #[test]
     fn spawn_runs_a_trivial_command_and_reports_exit_status() {
-        // `sh` ships on every Unix dev-box actually targets; on Windows
+        // `sh` ships on every Unix dbx actually targets; on Windows
         // CI this test is skipped since there's no native pty-friendly
         // shell guaranteed on PATH without WSL.
         if cfg!(windows) {

@@ -3,10 +3,10 @@ use anyhow::Result;
 
 pub mod distrobox;
 
-/// Abstracts the container backend dev-box drives. Distrobox is the only
+/// Abstracts the container backend dbx drives. Distrobox is the only
 /// implementation today, but this trait keeps the door open for
 /// alternative backends without touching the config or host layers.
-pub trait ContainerEngine {
+pub trait ContainerEngine: Send + Sync {
     /// Human-readable engine name, for diagnostics.
     fn name(&self) -> &'static str;
 
