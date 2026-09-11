@@ -68,24 +68,25 @@ These are modeled as two separate traits so that neither axis knows the other ex
 
 ```mermaid
 flowchart TB
+    AppContext["AppContext"]
     subgraph engine_axis["ContainerEngine -- WHAT to drive"]
-        CE[ContainerEngine trait]
-        Distrobox[distrobox.rs]
-        FutureEngine[future: docker-compose.rs]
+        CE["ContainerEngine trait"]
+        Distrobox["distrobox.rs"]
+        FutureEngine["future: docker-compose.rs"]
         CE --> Distrobox
         CE --> FutureEngine
     end
     subgraph host_axis["HostTransport -- HOW to run a command"]
-        HT[HostTransport trait]
-        Linux[linux.rs]
-        Windows[windows.rs]
-        Macos[macos.rs]
+        HT["HostTransport trait"]
+        Linux["linux.rs"]
+        Windows["windows.rs"]
+        Macos["macos.rs"]
         HT --> Linux
         HT --> Windows
         HT --> Macos
     end
-    AppContext --> engine_axis
-    AppContext --> host_axis
+    AppContext --> CE
+    AppContext --> HT
 ```
 
 `AppContext` (`context.rs`) picks one implementation of each trait at startup and
@@ -115,11 +116,15 @@ method built on top of it.
 
 ```mermaid
 flowchart TD
-    CP["command_parts(script) -> (program, args)\n(the only platform-specific method)"]
-    CP --> Run["run() -- inherits stdio, waits for exit"]
-    CP --> Capture["capture() -- trims stdout, for tool-existence checks"]
-    CP --> SpawnPiped["spawn_piped() -- plain OS pipes, for non-interactive SSH sessions"]
-    CP --> SpawnPty["spawn_pty() -- real pseudo-terminal, for interactive SSH sessions"]
+    CP["command_parts\nthe one platform-specific method"]
+    Run["run\ninherits stdio, waits for exit"]
+    Capture["capture\ntrims stdout, for tool-existence checks"]
+    SpawnPiped["spawn_piped\nplain OS pipes, non-interactive SSH sessions"]
+    SpawnPty["spawn_pty\nreal pseudo-terminal, interactive SSH sessions"]
+    CP --> Run
+    CP --> Capture
+    CP --> SpawnPiped
+    CP --> SpawnPty
 ```
 
 | Platform | `command_parts("distrobox list")` returns |
@@ -145,14 +150,14 @@ layers win on scalar keys, and specific keys (`additional_packages`, `init_hooks
 
 ```mermaid
 flowchart TD
-    Global["~/.config/dev-box/global.ini\n(user defaults, machine-wide)"]
-    Project["./devbox.ini\n(committed to the repo)"]
-    Local["./devbox.local.ini\n(gitignored, personal overrides)"]
-    Merged["merged Ini\n(config::merge_layers)"]
+    Global["global.ini\nuser defaults, machine-wide"]
+    Project["devbox.ini\ncommitted to the repo"]
+    Local["devbox.local.ini\ngitignored, personal overrides"]
+    Merged["merged Ini\nconfig::merge_layers"]
     Global --> Merged
     Project --> Merged
     Local --> Merged
-    Merged --> Payload["distrobox assemble create --file /dev/stdin"]
+    Merged --> Payload["distrobox assemble create"]
 ```
 
 `--config <path>` (repeatable, in `cli.rs`) replaces this default cascade entirely,
@@ -168,20 +173,20 @@ directory always resolves the same configuration `dev-box up` used.
 sequenceDiagram
     participant User
     participant Main as main.rs
-    participant Cfg as config::merge_layers
+    participant Cfg as config module
     participant Eng as ContainerEngine
     participant Host as HostTransport
-    participant Sshd as sshd::install_client_config
+    participant Sshd as sshd module
 
     User->>Main: dev-box up
-    Main->>Cfg: merge_layers(layers)
+    Main->>Cfg: merge_layers
     Cfg-->>Main: merged Ini
-    Main->>Eng: assemble(host, payload)
-    Eng->>Host: run("distrobox assemble create --file /dev/stdin", payload)
+    Main->>Eng: assemble host and payload
+    Eng->>Host: run distrobox assemble create
     Host-->>Eng: exit status
-    Main->>Sshd: install_client_config(box_name, layers)
-    Sshd-->>Main: ~/.ssh/config + ~/.ssh/dev-box_config updated
-    Main-->>User: "connect with: ssh box_name"
+    Main->>Sshd: install_client_config
+    Sshd-->>Main: ssh config files updated
+    Main-->>User: connect with ssh box_name
 ```
 
 `install_client_config` acquires an OS file lock (`sshd::with_ssh_config_lock`) before
@@ -199,38 +204,38 @@ stdin/stdout.
 
 ```mermaid
 sequenceDiagram
-    participant Client as SSH client (e.g. IDE)
+    participant Client as SSH client
     participant Proxy as dev-box ssh-proxy
     participant Host as HostTransport
     participant Box as distrobox container
 
-    Client->>Proxy: spawned via ProxyCommand (stdio pipe, no network)
-    Proxy->>Client: auth_none -> Accept (see sshd/handler.rs docs for why)
-    Client->>Proxy: pty_request(cols, rows) [only for interactive sessions]
-    Proxy->>Proxy: pending_pty.insert(channel, size)
-    Client->>Proxy: shell_request (or exec_request)
+    Client->>Proxy: spawned via ProxyCommand, stdio pipe only
+    Proxy->>Client: auth_none accepted
+    Client->>Proxy: pty_request with cols and rows
+    Proxy->>Proxy: remember requested pty size for this channel
+    Client->>Proxy: shell_request or exec_request
     alt pty was requested
-        Proxy->>Host: spawn_pty(enter_script, size)
-        Host->>Box: distrobox enter box_name  (attached to a real pty)
-    else no pty (plain scripted `ssh box cmd`)
-        Proxy->>Host: spawn_piped(enter_script)
-        Host->>Box: distrobox enter box_name -- sh -c cmd  (plain pipes)
+        Proxy->>Host: spawn_pty with the enter script and size
+        Host->>Box: distrobox enter, attached to a real pty
+    else no pty requested
+        Proxy->>Host: spawn_piped with the enter script
+        Host->>Box: distrobox enter, plain OS pipes
     end
-    Box-->>Proxy: stdout/stderr
+    Box-->>Proxy: stdout and stderr
     Proxy-->>Client: channel data
-    Client->>Proxy: data (keystrokes / stdin)
-    Proxy->>Box: forwarded to the child's stdin (pipe or pty)
+    Client->>Proxy: data, keystrokes or stdin
+    Proxy->>Box: forwarded to the child's stdin
     Box-->>Proxy: exit status
-    Proxy-->>Client: exit_status_request, eof, close
+    Proxy-->>Client: exit status, eof, close
 ```
 
 The pty-vs-piped choice happens once per channel and mirrors real OpenSSH semantics:
 
 ```mermaid
 flowchart TD
-    Start["shell_request / exec_request"] --> Check{"pty_request seen\nfor this channel?"}
-    Check -- yes --> Pty["spawn_child_pty\n(host::pty, real pseudo-terminal)"]
-    Check -- no --> Piped["spawn_child\n(plain OS pipes)"]
+    Start["shell_request or exec_request"] --> Check{"was a pty requested\nfor this channel"}
+    Check -- yes --> Pty["spawn_child_pty\nreal pseudo-terminal"]
+    Check -- no --> Piped["spawn_child\nplain OS pipes"]
 ```
 
 A pty is only allocated when the client actually asks for one — an interactive
