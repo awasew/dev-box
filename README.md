@@ -149,6 +149,7 @@ Clone one of our examples and run `dev-box up`:
 ## 📚 Documentation
 
 - **[README](README.md)** — Full feature overview and configuration guide
+- **[Architecture](docs/architecture.md)** — Module map, the `HostTransport`/`ContainerEngine` design, and how to extend dev-box
 - **[IDE Integration Guide](docs/ide-integration.md)** — Setup for VS Code, JetBrains, Zed, Neovim, Emacs
 - **[Filesystem Performance Guide](docs/filesystem-performance.md)** — Benchmarks, architecture, optimization
 - **[dev-box vs. Jetify Devbox](docs/vs-jetify-devbox.md)** — How the two projects actually differ, and what ideas we've borrowed
@@ -191,7 +192,6 @@ Clone one of our examples and run `dev-box up`:
 ## 🚀 What's Next?
 
 ### Short-term (v0.2)
-- Real PTY support (full-screen interactive tools)
 - Docker Compose backend (in addition to Distrobox)
 - Improved error messages & diagnostics
 

@@ -11,12 +11,18 @@
 //! same OS-level access needed to run `distrobox` directly.
 //!
 //! Each shell/exec request spawns `distrobox enter <box>` (or a specific
-//! command inside it) via `HostTransport::spawn_piped`, and pumps bytes
-//! between the SSH channel and the child process's stdio.
+//! command inside it). If the client requested a pty first (the normal
+//! case for an interactive `ssh <box>` session), it's spawned attached to
+//! a real pseudo-terminal via `HostTransport::spawn_pty` so full-screen
+//! programs and shell job control work correctly; otherwise (e.g. a
+//! scripted `ssh <box> cmd` with no `-t`) it's spawned with plain pipes
+//! via `HostTransport::spawn_piped`, matching normal OpenSSH behavior.
 
 use crate::engine::ContainerEngine;
+use crate::host::pty::{self, PtyChild, PtySize};
 use crate::host::HostTransport;
 use anyhow::Context;
+use portable_pty::{ChildKiller, MasterPty};
 use russh::server::{Auth, ChannelOpenHandle, Handler, Session};
 use russh::{Channel, ChannelId, Pty};
 use std::collections::HashMap;
@@ -26,14 +32,31 @@ use tokio::process::ChildStdin;
 use tokio::sync::oneshot;
 
 /// Tracks the live state of a child process spawned for an SSH channel.
-struct ChildState {
-    /// The child's stdin pipe. Set to `None` once `channel_eof` is received,
-    /// which closes the pipe and signals EOF to the process inside the box.
-    stdin: Option<ChildStdin>,
-    /// Sending on this channel triggers `child.kill()` in the background
-    /// exit-watcher task, so closing an SSH channel always terminates the
-    /// underlying `distrobox enter` process immediately.
-    kill_tx: oneshot::Sender<()>,
+enum ChildState {
+    /// Spawned via plain OS pipes (`HostTransport::spawn_piped`) -- the
+    /// non-interactive path used when the client didn't request a pty.
+    Piped {
+        /// The child's stdin pipe. Set to `None` once `channel_eof` is
+        /// received, which closes the pipe and signals EOF downstream.
+        stdin: Option<ChildStdin>,
+        /// Sending on this channel triggers `child.kill()` in the
+        /// background exit-watcher task, so closing an SSH channel
+        /// always terminates the underlying process immediately.
+        kill_tx: oneshot::Sender<()>,
+    },
+    /// Spawned attached to a real pseudo-terminal
+    /// (`HostTransport::spawn_pty`) -- the interactive path used when
+    /// the client sent a `pty_request` before `shell_request`/`exec_request`.
+    Pty {
+        /// Kept only for `window_change_request` to call `resize` on.
+        master: Box<dyn MasterPty + Send>,
+        /// Set to `None` on `channel_eof`, which drops the last sender
+        /// and lets the pty's writer thread exit, delivering a hangup
+        /// to the child -- the pty equivalent of closing a pipe's stdin.
+        input_tx: Option<std::sync::mpsc::Sender<Vec<u8>>>,
+        /// Same purpose as `Piped::kill_tx`.
+        kill_tx: oneshot::Sender<()>,
+    },
 }
 
 pub struct DevBoxHandler {
@@ -45,14 +68,18 @@ pub struct DevBoxHandler {
     pub forwarded_env: Vec<(String, String)>,
     pub work_dir: Option<String>,
     pub children: HashMap<ChannelId, ChildState>,
+    /// Records the size from a `pty_request` until the following
+    /// `shell_request`/`exec_request` consumes it and decides whether to
+    /// spawn via `spawn_child_pty` instead of `spawn_child`.
+    pub pending_pty: HashMap<ChannelId, PtySize>,
 }
 
 impl DevBoxHandler {
-    /// Spawns `script` via the host transport and wires its stdio to
-    /// `channel`: stdout/stderr are streamed back to the client as they
-    /// arrive, and the channel is closed with the child's exit status
-    /// once it terminates. The child's stdin is retained so `data()` can
-    /// forward further client input to it.
+    /// Spawns `script` via the host transport (plain pipes) and wires its
+    /// stdio to `channel`: stdout/stderr are streamed back to the client
+    /// as they arrive, and the channel is closed with the child's exit
+    /// status once it terminates. The child's stdin is retained so
+    /// `data()` can forward further client input to it.
     ///
     /// A `oneshot` kill channel is wired into the exit-watcher task so
     /// that `channel_close` can immediately terminate the child rather
@@ -74,7 +101,7 @@ impl DevBoxHandler {
         let (kill_tx, kill_rx) = oneshot::channel::<()>();
         self.children.insert(
             channel,
-            ChildState {
+            ChildState::Piped {
                 stdin: Some(stdin),
                 kill_tx,
             },
@@ -137,6 +164,77 @@ impl DevBoxHandler {
 
         Ok(())
     }
+
+    /// Spawns `script` attached to a real pseudo-terminal of the given
+    /// `size` and wires it to `channel`, mirroring `spawn_child` but
+    /// using `HostTransport::spawn_pty` instead of `spawn_piped` so
+    /// interactive full-screen programs and job control work.
+    fn spawn_child_pty(
+        &mut self,
+        channel: ChannelId,
+        script: &str,
+        size: PtySize,
+        session: &mut Session,
+    ) -> anyhow::Result<()> {
+        let PtyChild {
+            master,
+            killer,
+            output_rx,
+            input_tx,
+            wait_handle,
+        } = self
+            .host
+            .spawn_pty(script, size)
+            .context("failed to spawn distrobox in a pseudo-terminal")?;
+
+        let (kill_tx, kill_rx) = oneshot::channel::<()>();
+        self.children.insert(
+            channel,
+            ChildState::Pty {
+                master,
+                input_tx: Some(input_tx),
+                kill_tx,
+            },
+        );
+
+        let out_handle = session.handle();
+        let mut output_rx = output_rx;
+        tokio::spawn(async move {
+            while let Some(chunk) = output_rx.recv().await {
+                if out_handle.data(channel, chunk).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        let exit_handle = session.handle();
+        let mut killer: Box<dyn ChildKiller + Send + Sync> = killer;
+        tokio::spawn(async move {
+            tokio::select! {
+                // Normal path: child exits on its own.
+                status = wait_handle => {
+                    let code = status
+                        .ok()
+                        .and_then(|inner| inner.ok())
+                        .map(|s| s.exit_code())
+                        .unwrap_or(1);
+                    let _ = exit_handle.exit_status_request(channel, code).await;
+                    let _ = exit_handle.eof(channel).await;
+                    let _ = exit_handle.close(channel).await;
+                }
+                // Kill path: channel_close sent the kill signal before the
+                // child exited; terminate it immediately.
+                _ = kill_rx => {
+                    let _ = killer.kill();
+                    let _ = exit_handle.exit_status_request(channel, 1).await;
+                    let _ = exit_handle.eof(channel).await;
+                    let _ = exit_handle.close(channel).await;
+                }
+            }
+        });
+
+        Ok(())
+    }
 }
 
 impl Handler for DevBoxHandler {
@@ -168,7 +266,10 @@ impl Handler for DevBoxHandler {
             &self.forwarded_env,
             self.work_dir.as_deref(),
         );
-        self.spawn_child(channel, &script, session)?;
+        match self.pending_pty.remove(&channel) {
+            Some(size) => self.spawn_child_pty(channel, &script, size, session)?,
+            None => self.spawn_child(channel, &script, session)?,
+        }
         session.channel_success(channel)?;
         Ok(())
     }
@@ -186,7 +287,10 @@ impl Handler for DevBoxHandler {
             &self.forwarded_env,
             self.work_dir.as_deref(),
         );
-        self.spawn_child(channel, &script, session)?;
+        match self.pending_pty.remove(&channel) {
+            Some(size) => self.spawn_child_pty(channel, &script, size, session)?,
+            None => self.spawn_child(channel, &script, session)?,
+        }
         session.channel_success(channel)?;
         Ok(())
     }
@@ -197,11 +301,19 @@ impl Handler for DevBoxHandler {
         data: &[u8],
         _session: &mut Session,
     ) -> Result<(), Self::Error> {
-        if let Some(state) = self.children.get_mut(&channel) {
-            if let Some(stdin) = &mut state.stdin {
+        match self.children.get_mut(&channel) {
+            Some(ChildState::Piped {
+                stdin: Some(stdin), ..
+            }) => {
                 let _ = stdin.write_all(data).await;
                 let _ = stdin.flush().await;
             }
+            Some(ChildState::Pty {
+                input_tx: Some(tx), ..
+            }) => {
+                let _ = tx.send(data.to_vec());
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -211,12 +323,14 @@ impl Handler for DevBoxHandler {
         channel: ChannelId,
         _session: &mut Session,
     ) -> Result<(), Self::Error> {
-        // Drop the child's stdin handle to close the pipe, signalling EOF to
-        // the process inside the box. The ChildState itself (and its kill_tx)
-        // stays alive so channel_close can still send the kill signal if the
-        // process doesn't exit on its own after receiving EOF.
-        if let Some(state) = self.children.get_mut(&channel) {
-            state.stdin = None;
+        // Drop the child's input handle to signal EOF/hangup to the
+        // process inside the box. The ChildState itself (and its
+        // kill_tx) stays alive so channel_close can still send the kill
+        // signal if the process doesn't exit on its own afterward.
+        match self.children.get_mut(&channel) {
+            Some(ChildState::Piped { stdin, .. }) => *stdin = None,
+            Some(ChildState::Pty { input_tx, .. }) => *input_tx = None,
+            None => {}
         }
         Ok(())
     }
@@ -230,26 +344,42 @@ impl Handler for DevBoxHandler {
         // terminates the child immediately. If the child already exited
         // naturally, kill_rx was dropped and the send is a harmless no-op.
         if let Some(state) = self.children.remove(&channel) {
-            let _ = state.kill_tx.send(());
+            let kill_tx = match state {
+                ChildState::Piped { kill_tx, .. } => kill_tx,
+                ChildState::Pty { kill_tx, .. } => kill_tx,
+            };
+            let _ = kill_tx.send(());
         }
+        self.pending_pty.remove(&channel);
         Ok(())
     }
 
-    // The following are acknowledged but otherwise no-ops: dev-box does
-    // not allocate a real pseudo-terminal for the child process (yet),
-    // so interactive full-screen tools (vim, htop, ...) won't render
-    // correctly. Plain shells and most CLI tools work fine regardless.
+    /// Records the requested pty size for this channel; the following
+    /// `shell_request`/`exec_request` consumes it and spawns via
+    /// `spawn_child_pty` instead of the plain-pipe `spawn_child`. This
+    /// matches real OpenSSH semantics: a pty is only allocated when the
+    /// client explicitly asks for one (interactive `ssh <box>`, or `ssh
+    /// -t <box> cmd`), never for a plain scripted `ssh <box> cmd`.
     async fn pty_request(
         &mut self,
         channel: ChannelId,
         _term: &str,
-        _col_width: u32,
-        _row_height: u32,
-        _pix_width: u32,
-        _pix_height: u32,
+        col_width: u32,
+        row_height: u32,
+        pix_width: u32,
+        pix_height: u32,
         _modes: &[(Pty, u32)],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        self.pending_pty.insert(
+            channel,
+            PtySize {
+                rows: pty::clamp_u16(row_height),
+                cols: pty::clamp_u16(col_width),
+                pixel_width: pty::clamp_u16(pix_width),
+                pixel_height: pty::clamp_u16(pix_height),
+            },
+        );
         session.channel_success(channel)?;
         Ok(())
     }
@@ -268,12 +398,20 @@ impl Handler for DevBoxHandler {
     async fn window_change_request(
         &mut self,
         channel: ChannelId,
-        _col_width: u32,
-        _row_height: u32,
-        _pix_width: u32,
-        _pix_height: u32,
+        col_width: u32,
+        row_height: u32,
+        pix_width: u32,
+        pix_height: u32,
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        if let Some(ChildState::Pty { master, .. }) = self.children.get(&channel) {
+            let _ = master.resize(PtySize {
+                rows: pty::clamp_u16(row_height),
+                cols: pty::clamp_u16(col_width),
+                pixel_width: pty::clamp_u16(pix_width),
+                pixel_height: pty::clamp_u16(pix_height),
+            });
+        }
         session.channel_success(channel)?;
         Ok(())
     }

@@ -47,13 +47,23 @@ src/
   host/            Platform abstraction (Linux/macOS/Windows)
   sshd/            Embedded SSH server (russh)
 
+tests/
+  cli.rs                     Hermetic black-box CLI tests
+  distrobox_integration.rs   Opt-in (#[ignore]) tests needing a real Distrobox
+
 docs/
+  architecture.md              Module map, design rationale, diagrams -- read this first
   ide-integration.md          IDE setup guides
   filesystem-performance.md   Benchmark & architecture
 
 Cargo.toml         Dependencies and build config
 devbox.ini         Example config for this repo
 ```
+
+**Before touching `host/` or `engine/`**, read
+[`docs/architecture.md`](docs/architecture.md) — it explains the `HostTransport` /
+`ContainerEngine` split (the two independent axes almost every change in this repo
+touches one of) and walks through adding a new platform or backend step by step.
 
 ## How to Contribute
 
@@ -172,9 +182,9 @@ Fixes the issue where `dev-box enter --scratchpad` fails on Windows 11 with WSL2
 **Good first PR**: Fix a reported bug with a test case.
 
 ### ✨ Features
-- PTY support for interactive tools (full-screen editors)
 - Additional ContainerEngine backends (Docker Compose)
 - Policy layers for team/org config
+- Shell completions (bash, zsh, fish, PowerShell)
 
 **Good first PR**: Add a small CLI flag or config option with docs.
 

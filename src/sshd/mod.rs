@@ -76,6 +76,7 @@ async fn serve(
         forwarded_env,
         work_dir,
         children: HashMap::new(),
+        pending_pty: HashMap::new(),
     };
 
     let stream = tokio::io::join(tokio::io::stdin(), tokio::io::stdout());
@@ -104,19 +105,49 @@ pub fn install_client_config(box_name: &str, layers: &[PathBuf]) -> Result<()> {
     let ssh_dir = dirs::home_dir()
         .context("could not determine the home directory")?
         .join(".ssh");
-    fs::create_dir_all(&ssh_dir)
+
+    with_ssh_config_lock(&ssh_dir, || {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&ssh_dir, fs::Permissions::from_mode(0o700))
+                .with_context(|| format!("failed to set permissions on {}", ssh_dir.display()))?;
+        }
+
+        ensure_include(&ssh_dir.join("config"))?;
+        upsert_host_block(&ssh_dir.join("dev-box_config"), box_name, layers)?;
+        Ok(())
+    })
+}
+
+/// Runs `f` while holding an exclusive, cross-process OS file lock on a
+/// dedicated lock file inside `ssh_dir`.
+///
+/// `install_client_config` and `remove_client_config` each do a
+/// read-modify-write of `~/.ssh/config` and `~/.ssh/dev-box_config`. If
+/// two `dev-box` invocations for different boxes race (e.g. `dev-box up`
+/// for one project while `dev-box rm` runs for another), an unguarded
+/// read-modify-write could interleave and drop one process's edit. This
+/// forces them to serialize instead. The lock is released automatically
+/// when `lock_file` is dropped at the end of this function (or on an
+/// early return via `?` inside `f`).
+fn with_ssh_config_lock<T>(ssh_dir: &Path, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    fs::create_dir_all(ssh_dir)
         .with_context(|| format!("failed to create {}", ssh_dir.display()))?;
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&ssh_dir, fs::Permissions::from_mode(0o700))
-            .with_context(|| format!("failed to set permissions on {}", ssh_dir.display()))?;
-    }
+    let lock_path = ssh_dir.join(".dev-box.lock");
+    let lock_file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(&lock_path)
+        .with_context(|| format!("failed to open lock file {}", lock_path.display()))?;
+    lock_file
+        .lock()
+        .with_context(|| format!("failed to acquire lock on {}", lock_path.display()))?;
 
-    ensure_include(&ssh_dir.join("config"))?;
-    upsert_host_block(&ssh_dir.join("dev-box_config"), box_name, layers)?;
-    Ok(())
+    let result = f();
+    let _ = lock_file.unlock();
+    result
 }
 
 /// Resolves a slice of (potentially relative) config-layer paths to their
@@ -212,11 +243,13 @@ pub fn remove_client_config(box_name: &str) -> Result<()> {
         None => return Ok(()),
     };
     let config_path = ssh_dir.join("dev-box_config");
-    if !config_path.exists() {
-        return Ok(());
-    }
-    remove_host_block(&config_path, box_name)?;
-    Ok(())
+
+    with_ssh_config_lock(&ssh_dir, || {
+        if !config_path.exists() {
+            return Ok(());
+        }
+        remove_host_block(&config_path, box_name)
+    })
 }
 
 /// Removes the marker-delimited `Host` block for `box_name` from the config file,
@@ -366,5 +399,42 @@ mod tests {
         let resolved = absolute_layers(&layers).expect("resolves");
         assert!(resolved[0].is_absolute());
         assert!(resolved[0].ends_with("devbox.ini"));
+    }
+
+    #[test]
+    fn with_ssh_config_lock_runs_closure_and_returns_its_value() {
+        let dir = temp_path("lock-dir");
+        let _ = fs::remove_dir_all(&dir);
+
+        let value = with_ssh_config_lock(&dir, || Ok(42)).expect("closure runs");
+        assert_eq!(value, 42);
+        assert!(dir.join(".dev-box.lock").exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn with_ssh_config_lock_propagates_closure_errors() {
+        let dir = temp_path("lock-dir-err");
+        let _ = fs::remove_dir_all(&dir);
+
+        let result: Result<()> = with_ssh_config_lock(&dir, || anyhow::bail!("boom"));
+        assert!(result.is_err());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn with_ssh_config_lock_serializes_sequential_calls() {
+        // Sequential calls on the same lock file must both succeed --
+        // the lock is released when the first call's guard drops, so a
+        // second call from the same process should never deadlock.
+        let dir = temp_path("lock-dir-seq");
+        let _ = fs::remove_dir_all(&dir);
+
+        with_ssh_config_lock(&dir, || Ok(())).expect("first call");
+        with_ssh_config_lock(&dir, || Ok(())).expect("second call");
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

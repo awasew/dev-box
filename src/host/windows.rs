@@ -1,14 +1,12 @@
-use super::{run_with_stdin, HostTransport};
-use anyhow::{bail, Context, Result};
-use std::process::{Command, ExitStatus, Stdio};
+use super::HostTransport;
+use anyhow::{bail, Result};
 
 /// Windows can't run Linux containers natively, so dev-box bridges into
 /// WSL2, where distrobox and its backend (Podman/Docker) actually run.
 pub struct WindowsHost;
 
-/// Shared guard used by all three transport methods: fails fast with a clear
-/// message if `wsl.exe` is not on the PATH, rather than letting the spawned
-/// command produce a confusing error.
+/// Fails fast with a clear message if `wsl.exe` is not on the PATH,
+/// rather than letting the spawned command produce a confusing error.
 fn require_wsl() -> Result<()> {
     if which::which("wsl.exe").is_err() {
         bail!("dev-box requires WSL2 on Windows. Install it with `wsl --install` and try again.");
@@ -21,30 +19,16 @@ impl HostTransport for WindowsHost {
         "windows (WSL2)"
     }
 
-    fn run(&self, script: &str, stdin_payload: Option<&str>) -> Result<ExitStatus> {
+    fn command_parts(&self, script: &str) -> Result<(String, Vec<String>)> {
         require_wsl()?;
-        let mut cmd = Command::new("wsl.exe");
-        cmd.args(["-e", "sh", "-c", script]);
-        run_with_stdin(cmd, stdin_payload)
-    }
-
-    fn capture(&self, script: &str) -> Result<String> {
-        require_wsl()?;
-        let output = Command::new("wsl.exe")
-            .args(["-e", "sh", "-c", script])
-            .output()
-            .with_context(|| format!("failed to run: {script}"))?;
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    }
-
-    fn spawn_piped(&self, script: &str) -> Result<tokio::process::Child> {
-        require_wsl()?;
-        tokio::process::Command::new("wsl.exe")
-            .args(["-e", "sh", "-c", script])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .context("failed to spawn host process")
+        Ok((
+            "wsl.exe".to_string(),
+            vec![
+                "-e".to_string(),
+                "sh".to_string(),
+                "-c".to_string(),
+                script.to_string(),
+            ],
+        ))
     }
 }

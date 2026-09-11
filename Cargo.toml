@@ -2,6 +2,10 @@
 name = "dev-box"
 version = "0.1.0"
 edition = "2021"
+# `sshd::with_ssh_config_lock` uses `std::fs::File::lock`/`unlock`,
+# stabilized in Rust 1.89. Pinning this gives a clear "needs a newer
+# compiler" error instead of a confusing "no method named `lock`" one.
+rust-version = "1.89"
 description = "IDE-independent developer environment orchestrator built on Distrobox"
 license = "MIT"
 repository = "https://github.com/srikanthrayudu/dev-box"
@@ -31,6 +35,12 @@ tokio = { version = "1", features = ["rt-multi-thread", "io-std", "io-util", "pr
 rand = "0.10"
 log = "0.4"
 env_logger = "0.11"
+
+# Real pseudo-terminal allocation for the embedded SSH server (see
+# `host::pty` / `sshd::handler`), so interactive full-screen programs
+# (vim, htop, shell job control, ...) work correctly over `ssh <box>`,
+# not just plain non-interactive command execution.
+portable-pty = "0.9"
 
 # Binary size & speed optimizations for release builds.
 [profile.release]

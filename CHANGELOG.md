@@ -19,16 +19,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for Podman and Docker
 - Environment variable forwarding for API keys and secrets
 - Git credentials and SSH key integration via Distrobox bind-mounts
+- Real pseudo-terminal (PTY) allocation for the embedded SSH server, so
+  interactive full-screen programs (vim, htop, ...) and shell job control
+  work correctly over `ssh <box>` (falls back to plain pipes for
+  non-interactive/scripted sessions, matching OpenSSH semantics)
+- Cross-process file locking around `~/.ssh/config` /
+  `~/.ssh/dev-box_config` writes, so concurrent `dev-box` invocations for
+  different boxes can't interleave and corrupt either file
 
 ### Documentation
-- Architecture and design overview
+- Architecture and design overview (`docs/architecture.md`), with diagrams
+  covering the `HostTransport`/`ContainerEngine` split, config layering,
+  and the `dev-box up` / interactive `ssh <box>` control flow
 - IDE Integration Guide (VS Code, Cursor, JetBrains Gateway, Zed, Neovim)
 - Filesystem Performance Guide (benchmarks and optimization tips)
 - Configuration layering documentation
 - Quick start guide
 
 ### Known Limitations
-- No full PTY support yet (interactive full-screen tools need workaround)
 - Single ContainerEngine backend (Distrobox only)
 - CLI interfaces subject to change before v1.0
 - Limited Windows testing (alpha phase)
@@ -38,7 +46,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Future Releases
 
 ### [0.2.0] - Planned
-- Real pseudo-terminal (PTY) allocation for the embedded SSH server
 - Additional ContainerEngine backends (Docker Compose, Podman Compose)
 - GUI/TUI for configuration and container lifecycle management
 - Policy/lock layers for team and org-level configuration enforcement
