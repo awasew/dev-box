@@ -26,3 +26,42 @@ pub fn to_absolute(path: &Path) -> Result<PathBuf> {
             .join(path))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unquote_strips_matching_double_quotes() {
+        assert_eq!(unquote("\"ubuntu:24.04\""), "ubuntu:24.04");
+    }
+
+    #[test]
+    fn unquote_leaves_unquoted_strings_untouched() {
+        assert_eq!(unquote("ubuntu:24.04"), "ubuntu:24.04");
+    }
+
+    #[test]
+    fn unquote_leaves_single_quotes_untouched() {
+        assert_eq!(unquote("'ubuntu:24.04'"), "'ubuntu:24.04'");
+    }
+
+    #[test]
+    fn to_absolute_leaves_absolute_paths_untouched() {
+        #[cfg(windows)]
+        let abs = PathBuf::from("C:\\some\\abs\\path");
+        #[cfg(not(windows))]
+        let abs = PathBuf::from("/some/abs/path");
+
+        let resolved = to_absolute(&abs).expect("resolves");
+        assert_eq!(resolved, abs);
+    }
+
+    #[test]
+    fn to_absolute_joins_relative_paths_onto_cwd() {
+        let rel = PathBuf::from("devbox.ini");
+        let resolved = to_absolute(&rel).expect("resolves");
+        let expected = std::env::current_dir().expect("cwd").join("devbox.ini");
+        assert_eq!(resolved, expected);
+    }
+}

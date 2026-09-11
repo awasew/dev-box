@@ -23,7 +23,10 @@ anyhow = "1.0"
 # Embedded SSH server used by `dev-box ssh-proxy`: speaks the SSH
 # protocol directly over stdin/stdout (no TCP listener, no host sshd,
 # no keys) so any Remote-SSH-capable IDE can attach transparently.
-russh = "0.63"
+# default-features pulls in aws-lc-rs, whose aws-lc-sys build script
+# requires NASM to be installed on Windows. `ring` provides the same
+# capability without that external toolchain dependency.
+russh = { version = "0.63", default-features = false, features = ["ring", "flate2", "rsa"] }
 tokio = { version = "1", features = ["rt-multi-thread", "io-std", "io-util", "process", "sync"] }
 rand = "0.10"
 log = "0.4"

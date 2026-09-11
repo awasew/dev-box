@@ -41,8 +41,8 @@ you want bit-for-bit pinned tool versions without touching containers at all (pi
 
 Reading Devbox's design surfaced a few genuinely good ideas worth adapting into `dev-box`,
 even though the underlying mechanism is different. None of these are implemented yet; they're
-tracked here so they don't get lost, and cross-referenced from the main
-[Roadmap](../README.md#roadmap).
+tracked here so they don't get lost, and cross-referenced from the "What's Next?" roadmap
+section in the main [README](../README.md).
 
 1. **Pin the resolved image, not just a floating tag.**
    Devbox's `devbox.lock` guarantees the *exact* environment you tested is the one you get

@@ -133,3 +133,62 @@ impl ContainerEngine for DistroboxEngine {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shell_quote_wraps_in_single_quotes() {
+        assert_eq!(shell_quote("simple"), "'simple'");
+    }
+
+    #[test]
+    fn shell_quote_escapes_embedded_single_quotes() {
+        // `it's` -> 'it'\''s' -- closes the quote, escapes a literal ',
+        // reopens the quote.
+        assert_eq!(shell_quote("it's"), "'it'\\''s'");
+    }
+
+    #[test]
+    fn enter_script_without_extras_is_just_distrobox_enter() {
+        let engine = DistroboxEngine;
+        let script = engine.enter_script("my-box", None, &[], None);
+        assert_eq!(script, "distrobox enter 'my-box'");
+    }
+
+    #[test]
+    fn enter_script_prepends_cd_when_work_dir_given() {
+        let engine = DistroboxEngine;
+        let script = engine.enter_script("my-box", None, &[], Some("/tmp/scratch"));
+        assert_eq!(script, "cd '/tmp/scratch' && distrobox enter 'my-box'");
+    }
+
+    #[test]
+    fn enter_script_appends_forwarded_env_as_additional_flags() {
+        let engine = DistroboxEngine;
+        let env = vec![
+            ("FOO".to_string(), "bar".to_string()),
+            ("BAZ".to_string(), "qux".to_string()),
+        ];
+        let script = engine.enter_script("my-box", None, &env, None);
+        assert_eq!(
+            script,
+            "distrobox enter 'my-box' --additional-flags '--env FOO=bar --env BAZ=qux'"
+        );
+    }
+
+    #[test]
+    fn enter_script_appends_command_via_sh_c() {
+        let engine = DistroboxEngine;
+        let script = engine.enter_script("my-box", Some("echo hi"), &[], None);
+        assert_eq!(script, "distrobox enter 'my-box' -- sh -c 'echo hi'");
+    }
+
+    #[test]
+    fn enter_script_escapes_box_name_with_single_quote() {
+        let engine = DistroboxEngine;
+        let script = engine.enter_script("my'box", None, &[], None);
+        assert_eq!(script, "distrobox enter 'my'\\''box'");
+    }
+}

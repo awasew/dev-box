@@ -256,3 +256,115 @@ fn remove_host_block(path: &Path, box_name: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "dev-box-sshd-test-{name}-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ))
+    }
+
+    #[test]
+    fn ensure_include_adds_line_once() {
+        let path = temp_path("ssh-config");
+        let _ = fs::remove_file(&path);
+
+        ensure_include(&path).expect("first insert succeeds");
+        let first = fs::read_to_string(&path).expect("read");
+        assert_eq!(
+            first.lines().filter(|l| l.trim() == INCLUDE_LINE).count(),
+            1
+        );
+
+        // Running it again must not duplicate the line.
+        ensure_include(&path).expect("second call is a no-op");
+        let second = fs::read_to_string(&path).expect("read");
+        assert_eq!(
+            second.lines().filter(|l| l.trim() == INCLUDE_LINE).count(),
+            1
+        );
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn ensure_include_preserves_existing_content() {
+        let path = temp_path("ssh-config-existing");
+        fs::write(&path, "Host example\n    HostName example.com\n").expect("seed file");
+
+        ensure_include(&path).expect("insert succeeds");
+        let content = fs::read_to_string(&path).expect("read");
+        assert!(content.contains("Host example"));
+        assert!(content.lines().next() == Some(INCLUDE_LINE));
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn upsert_host_block_inserts_then_updates_in_place() {
+        let path = temp_path("dev-box-config");
+        let _ = fs::remove_file(&path);
+        let layers = vec![PathBuf::from("/tmp/devbox.ini")];
+
+        upsert_host_block(&path, "my-box", &layers).expect("first insert");
+        let first = fs::read_to_string(&path).expect("read");
+        assert!(first.contains("Host my-box"));
+        assert!(first.contains("ssh-proxy my-box"));
+
+        // Add a second, unrelated box.
+        upsert_host_block(&path, "other-box", &layers).expect("second insert");
+        let with_two = fs::read_to_string(&path).expect("read");
+        assert!(with_two.contains("Host my-box"));
+        assert!(with_two.contains("Host other-box"));
+
+        // Re-running for `my-box` must replace only its own block, not
+        // duplicate it or disturb `other-box`.
+        upsert_host_block(&path, "my-box", &layers).expect("update");
+        let updated = fs::read_to_string(&path).expect("read");
+        assert_eq!(updated.matches("Host my-box").count(), 1);
+        assert_eq!(updated.matches("Host other-box").count(), 1);
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn remove_host_block_deletes_only_the_named_block() {
+        let path = temp_path("dev-box-config-remove");
+        let _ = fs::remove_file(&path);
+        let layers = vec![PathBuf::from("/tmp/devbox.ini")];
+
+        upsert_host_block(&path, "keep-box", &layers).expect("insert keep-box");
+        upsert_host_block(&path, "drop-box", &layers).expect("insert drop-box");
+
+        remove_host_block(&path, "drop-box").expect("remove drop-box");
+        let content = fs::read_to_string(&path).expect("read");
+        assert!(content.contains("Host keep-box"));
+        assert!(!content.contains("Host drop-box"));
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn remove_host_block_is_a_noop_when_block_absent() {
+        let path = temp_path("dev-box-config-noop");
+        fs::write(&path, "Host untouched\n    HostName example.com\n").expect("seed");
+
+        remove_host_block(&path, "nonexistent-box").expect("no-op succeeds");
+        let content = fs::read_to_string(&path).expect("read");
+        assert!(content.contains("Host untouched"));
+
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn absolute_layers_resolves_relative_paths() {
+        let layers = vec![PathBuf::from("devbox.ini")];
+        let resolved = absolute_layers(&layers).expect("resolves");
+        assert!(resolved[0].is_absolute());
+        assert!(resolved[0].ends_with("devbox.ini"));
+    }
+}

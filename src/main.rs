@@ -19,10 +19,7 @@ fn main() -> Result<()> {
     // Initialise logging. Always respect RUST_LOG if already set; otherwise
     // default to "warn" (quiet) unless --verbose was passed (sets "debug").
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var(
-            "RUST_LOG",
-            if cli.verbose { "debug" } else { "warn" },
-        );
+        std::env::set_var("RUST_LOG", if cli.verbose { "debug" } else { "warn" });
     }
     env_logger::init();
 
@@ -41,7 +38,10 @@ fn main() -> Result<()> {
             print!("{}", to_ini_string(&ctx.config)?);
         }
 
-        Command::Up { dry_run, scratchpad } => {
+        Command::Up {
+            dry_run,
+            scratchpad,
+        } => {
             let payload = to_ini_string(&ctx.config)?;
 
             if dry_run {
@@ -59,8 +59,17 @@ fn main() -> Result<()> {
 
             let use_scratchpad = scratchpad || config::is_scratchpad_enabled(&ctx.config);
             if use_scratchpad && cfg!(target_os = "windows") {
-                if let Ok(cwd) = std::env::current_dir() {
-                    let _ = host::scratchpad::sync_to_scratchpad(ctx.host.as_ref(), &cwd, &box_name);
+                match std::env::current_dir() {
+                    Ok(cwd) => {
+                        if let Err(e) =
+                            host::scratchpad::sync_to_scratchpad(ctx.host.as_ref(), &cwd, &box_name)
+                        {
+                            eprintln!("==> warning: scratchpad sync failed: {e:#}");
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("==> warning: could not determine current directory for scratchpad sync: {e:#}");
+                    }
                 }
             }
 
@@ -76,8 +85,9 @@ fn main() -> Result<()> {
         Command::Enter { name, scratchpad } => {
             let box_name = match name {
                 Some(n) => n,
-                None => ctx.box_name()
-                    .map_err(|e| e.context("no box name given and no [dev-environment] name= found in config"))?,
+                None => ctx.box_name().map_err(|e| {
+                    e.context("no box name given and no [dev-environment] name= found in config")
+                })?,
             };
             let forwarded_env = ctx.forwarded_env();
             let use_scratchpad = scratchpad || config::is_scratchpad_enabled(&ctx.config);
@@ -95,18 +105,24 @@ fn main() -> Result<()> {
                 );
 
                 // On session exit, sync modified source files back to Windows host.
-                let _ = host::scratchpad::sync_from_scratchpad(ctx.host.as_ref(), &cwd, &box_name);
+                if let Err(e) =
+                    host::scratchpad::sync_from_scratchpad(ctx.host.as_ref(), &cwd, &box_name)
+                {
+                    eprintln!("==> warning: failed to sync changes back from scratchpad: {e:#}");
+                }
                 enter_res?;
             } else {
-                ctx.engine.enter(ctx.host.as_ref(), &box_name, &forwarded_env, None)?;
+                ctx.engine
+                    .enter(ctx.host.as_ref(), &box_name, &forwarded_env, None)?;
             }
         }
 
         Command::Sync { name, reverse } => {
             let box_name = match name {
                 Some(n) => n,
-                None => ctx.box_name()
-                    .map_err(|e| e.context("no box name given and no [dev-environment] name= found in config"))?,
+                None => ctx.box_name().map_err(|e| {
+                    e.context("no box name given and no [dev-environment] name= found in config")
+                })?,
             };
             let cwd = std::env::current_dir()?;
             if reverse {
@@ -125,8 +141,9 @@ fn main() -> Result<()> {
         Command::Stop { name } => {
             let box_name = match name {
                 Some(n) => n,
-                None => ctx.box_name()
-                    .map_err(|e| e.context("no box name given and no [dev-environment] name= found in config"))?,
+                None => ctx.box_name().map_err(|e| {
+                    e.context("no box name given and no [dev-environment] name= found in config")
+                })?,
             };
             eprintln!("==> stopping dev-box environment: {box_name}");
             ctx.engine
@@ -137,24 +154,30 @@ fn main() -> Result<()> {
         Command::Rm { name, force } => {
             let box_name = match name {
                 Some(n) => n,
-                None => ctx.box_name()
-                    .map_err(|e| e.context("no box name given and no [dev-environment] name= found in config"))?,
+                None => ctx.box_name().map_err(|e| {
+                    e.context("no box name given and no [dev-environment] name= found in config")
+                })?,
             };
             eprintln!("==> removing dev-box environment: {box_name}");
             ctx.engine
                 .rm(ctx.host.as_ref(), &box_name, force)
                 .map_err(|e| e.context(format!("failed to remove {box_name}")))?;
-            let _ = sshd::remove_client_config(&box_name);
-            let _ = host::scratchpad::clean_scratchpad(ctx.host.as_ref(), &box_name);
+            if let Err(e) = sshd::remove_client_config(&box_name) {
+                eprintln!("==> warning: failed to remove SSH client config for {box_name}: {e:#}");
+            }
+            if let Err(e) = host::scratchpad::clean_scratchpad(ctx.host.as_ref(), &box_name) {
+                eprintln!("==> warning: failed to clean scratchpad for {box_name}: {e:#}");
+            }
         }
 
         Command::SshProxy { name } => {
             let forwarded_env = ctx.forwarded_env();
-            let work_dir = if config::is_scratchpad_enabled(&ctx.config) && cfg!(target_os = "windows") {
-                Some(host::scratchpad::scratchpad_path(&name))
-            } else {
-                None
-            };
+            let work_dir =
+                if config::is_scratchpad_enabled(&ctx.config) && cfg!(target_os = "windows") {
+                    Some(host::scratchpad::scratchpad_path(&name))
+                } else {
+                    None
+                };
             sshd::run(
                 Arc::clone(&ctx.host),
                 name,

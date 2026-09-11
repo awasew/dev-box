@@ -25,7 +25,11 @@ impl AppContext {
         // Arc::from(Box<dyn T>) is stable since Rust 1.21.
         let host: Arc<dyn HostTransport> = Arc::from(host::detect());
         let engine: Arc<dyn ContainerEngine> = Arc::new(DistroboxEngine);
-        Ok(Self { config, host, engine })
+        Ok(Self {
+            config,
+            host,
+            engine,
+        })
     }
 
     /// Reads `[dev-environment] name=` from the merged configuration.

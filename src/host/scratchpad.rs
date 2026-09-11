@@ -49,11 +49,7 @@ fn ensure_rsync(host: &dyn HostTransport) -> Result<()> {
 /// Synchronizes project files from the Windows host directory into the WSL2
 /// ext4 scratchpad. Honors `.gitignore` and keeps heavy build artifacts
 /// (`target/`, `node_modules/`) isolated.
-pub fn sync_to_scratchpad(
-    host: &dyn HostTransport,
-    host_dir: &Path,
-    box_name: &str,
-) -> Result<()> {
+pub fn sync_to_scratchpad(host: &dyn HostTransport, host_dir: &Path, box_name: &str) -> Result<()> {
     ensure_rsync(host)?;
     let wsl_src = to_wsl_path(host, host_dir)?;
     let target = scratchpad_path(box_name);
@@ -65,7 +61,8 @@ pub fn sync_to_scratchpad(
         src_q = shell_quote(&wsl_src),
     );
 
-    let status = host.run(&script, None)
+    let status = host
+        .run(&script, None)
         .context("failed to execute scratchpad sync to WSL")?;
     if !status.success() {
         bail!("rsync to scratchpad failed with status: {status}");
@@ -92,7 +89,8 @@ pub fn sync_from_scratchpad(
         dest_q = shell_quote(&wsl_dest),
     );
 
-    let status = host.run(&script, None)
+    let status = host
+        .run(&script, None)
         .context("failed to execute reverse scratchpad sync to host")?;
     if !status.success() {
         bail!("rsync from scratchpad failed with status: {status}");
