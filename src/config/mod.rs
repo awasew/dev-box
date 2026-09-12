@@ -238,7 +238,7 @@ mod tests {
     #[test]
     fn merge_layers_rejects_malformed_ini() {
         let bad = write_temp_ini("malformed", "[unclosed-section\nkey = val\n");
-        let result = merge_layers(&[bad.clone()]);
+        let result = merge_layers(std::slice::from_ref(&bad));
         assert!(result.is_err());
         let _ = std::fs::remove_file(bad);
     }

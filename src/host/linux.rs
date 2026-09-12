@@ -3,6 +3,7 @@ use anyhow::Result;
 
 /// Native Linux transport: runs commands directly through a shell, no
 /// virtualization layer needed since distrobox runs natively here.
+#[allow(dead_code)]
 pub struct LinuxHost;
 
 impl HostTransport for LinuxHost {

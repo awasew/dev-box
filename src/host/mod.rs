@@ -95,15 +95,15 @@ pub trait HostTransport: Send + Sync {
 pub fn detect() -> Box<dyn HostTransport> {
     #[cfg(target_os = "linux")]
     {
-        return Box::new(linux::LinuxHost);
+        Box::new(linux::LinuxHost)
     }
     #[cfg(target_os = "windows")]
     {
-        return Box::new(windows::WindowsHost);
+        Box::new(windows::WindowsHost)
     }
     #[cfg(target_os = "macos")]
     {
-        return Box::new(macos::MacHost::detect());
+        Box::new(macos::MacHost::detect())
     }
     #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
     {

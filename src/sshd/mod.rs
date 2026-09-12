@@ -142,6 +142,7 @@ fn with_ssh_config_lock<T>(ssh_dir: &Path, f: impl FnOnce() -> Result<T>) -> Res
     let lock_file = fs::OpenOptions::new()
         .create(true)
         .write(true)
+        .truncate(false)
         .open(&lock_path)
         .with_context(|| format!("failed to open lock file {}", lock_path.display()))?;
     lock_file
@@ -183,8 +184,7 @@ fn ensure_include(config_path: &Path) -> Result<()> {
 /// inside dbx's own managed config file, leaving every other box's
 /// block untouched.
 fn upsert_host_block(path: &Path, box_name: &str, layers: &[PathBuf]) -> Result<()> {
-    let exe =
-        std::env::current_exe().context("could not determine dbx's own executable path")?;
+    let exe = std::env::current_exe().context("could not determine dbx's own executable path")?;
     let begin = format!("{BEGIN_MARKER_PREFIX} {box_name} >>>");
     let end = format!("{END_MARKER_PREFIX} {box_name} <<<");
     let legacy_begin = format!("{LEGACY_BEGIN_MARKER_PREFIX} {box_name} >>>");

@@ -8,6 +8,7 @@ pub mod distrobox;
 /// alternative backends without touching the config or host layers.
 pub trait ContainerEngine: Send + Sync {
     /// Human-readable engine name, for diagnostics.
+    #[allow(dead_code)]
     fn name(&self) -> &'static str;
 
     /// Whether the engine's binary is reachable on the given host.
