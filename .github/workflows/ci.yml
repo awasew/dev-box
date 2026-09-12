@@ -29,11 +29,6 @@ jobs:
   integration:
     name: Integration tests (real Distrobox + Podman)
     runs-on: ubuntu-latest
-    # Real container startup/image pulls can be flaky in CI; surface
-    # failures without blocking merges on transient infra issues. The
-    # `test` job above already covers every hermetic code path on all
-    # three platforms and is what actually gates merges.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust toolchain

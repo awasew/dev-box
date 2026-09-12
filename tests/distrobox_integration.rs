@@ -51,6 +51,24 @@ fn unique_dir(name: &str) -> PathBuf {
     dir
 }
 
+/// RAII guard ensuring any created test box is removed even if assertions fail.
+struct BoxGuard {
+    box_name: String,
+    dir: PathBuf,
+}
+
+impl Drop for BoxGuard {
+    fn drop(&mut self) {
+        let _ = bin()
+            .arg("rm")
+            .arg("--force")
+            .arg(&self.box_name)
+            .current_dir(&self.dir)
+            .output();
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
 #[test]
 #[ignore = "requires a real Distrobox + Podman/Docker environment; run with `--ignored`"]
 fn up_then_rm_round_trip() {
@@ -61,6 +79,10 @@ fn up_then_rm_round_trip() {
 
     let box_name = format!("dbx-integration-test-{}", std::process::id());
     let dir = unique_dir("roundtrip");
+    let _guard = BoxGuard {
+        box_name: box_name.clone(),
+        dir: dir.clone(),
+    };
     std::fs::write(
         dir.join("dbx.ini"),
         format!("[dev-environment]\nname = \"{box_name}\"\nimage = \"ubuntu:24.04\"\n"),
@@ -126,6 +148,117 @@ fn up_then_rm_round_trip() {
     );
 
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+#[ignore = "requires a real Distrobox + Podman/Docker environment; run with `--ignored`"]
+fn stop_and_cleanup_round_trip() {
+    if !distrobox_available() {
+        eprintln!("skipping stop_and_cleanup_round_trip: distrobox not found on this host");
+        return;
+    }
+
+    let box_name = format!("dbx-stop-test-{}", std::process::id());
+    let dir = unique_dir("stop");
+    let _guard = BoxGuard {
+        box_name: box_name.clone(),
+        dir: dir.clone(),
+    };
+
+    std::fs::write(
+        dir.join("dbx.ini"),
+        format!("[dev-environment]\nname = \"{box_name}\"\nimage = \"ubuntu:24.04\"\n"),
+    )
+    .expect("write dbx.ini");
+
+    let up = bin()
+        .arg("up")
+        .current_dir(&dir)
+        .output()
+        .expect("run dbx up");
+    assert!(
+        up.status.success(),
+        "dbx up failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&up.stdout),
+        String::from_utf8_lossy(&up.stderr)
+    );
+
+    let stop = bin()
+        .arg("stop")
+        .arg(&box_name)
+        .current_dir(&dir)
+        .output()
+        .expect("run dbx stop");
+    assert!(
+        stop.status.success(),
+        "dbx stop failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&stop.stdout),
+        String::from_utf8_lossy(&stop.stderr)
+    );
+
+    let rm = bin()
+        .arg("rm")
+        .arg("--force")
+        .arg(&box_name)
+        .current_dir(&dir)
+        .output()
+        .expect("run dbx rm");
+    assert!(
+        rm.status.success(),
+        "dbx rm failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&rm.stdout),
+        String::from_utf8_lossy(&rm.stderr)
+    );
+}
+
+#[test]
+#[ignore = "requires a real Distrobox + Podman/Docker environment; run with `--ignored`"]
+fn custom_config_assembly_round_trip() {
+    if !distrobox_available() {
+        eprintln!("skipping custom_config_assembly_round_trip: distrobox not found on this host");
+        return;
+    }
+
+    let box_name = format!("dbx-custom-test-{}", std::process::id());
+    let dir = unique_dir("custom");
+    let _guard = BoxGuard {
+        box_name: box_name.clone(),
+        dir: dir.clone(),
+    };
+
+    std::fs::write(
+        dir.join("dbx.ini"),
+        format!(
+            "[dev-environment]\nname = \"{box_name}\"\nimage = \"ubuntu:24.04\"\ninit_hooks = \"touch /tmp/dbx_init_test\"\n"
+        ),
+    )
+    .expect("write dbx.ini");
+
+    let up = bin()
+        .arg("up")
+        .current_dir(&dir)
+        .output()
+        .expect("run dbx up");
+    assert!(
+        up.status.success(),
+        "dbx up failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&up.stdout),
+        String::from_utf8_lossy(&up.stderr)
+    );
+
+    let rm = bin()
+        .arg("rm")
+        .arg("--force")
+        .arg(&box_name)
+        .current_dir(&dir)
+        .output()
+        .expect("run dbx rm");
+    assert!(
+        rm.status.success(),
+        "dbx rm failed:\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&rm.stdout),
+        String::from_utf8_lossy(&rm.stderr)
+    );
 }
 
 #[test]
