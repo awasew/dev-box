@@ -38,20 +38,20 @@ src/
   engine/        *What* container tool to drive
     mod.rs         ContainerEngine trait
     distrobox.rs   The only implementation today
-  host/          *How* to run a command on this OS
-    mod.rs         HostTransport trait + shared default methods
-    linux.rs       Native Linux adapter
-    windows.rs     WSL2 adapter
-    macos.rs       Podman Machine / Lima adapter
+  host/          *How* to run a command on this OS (compile-time target specialized)
+    mod.rs         HostTransport trait + shared defaults + current() compile-time resolution
+    linux.rs       Native Linux adapter (active on Linux; zero scratchpad overhead)
+    windows.rs     WSL2 adapter + scratchpad integration (active on Windows)
+    macos.rs       Podman Machine / Lima adapter (active on macOS)
     pty.rs         Cross-platform pseudo-terminal bridge (portable_pty <-> tokio)
-    scratchpad.rs  Windows/macOS native-filesystem sync (rsync-based)
+    scratchpad.rs  WSL2 native-filesystem ext4 sync (rsync-based; active on Windows)
   sshd/          Embedded SSH server (keyless, no TCP listener)
     mod.rs         Server bootstrap + ~/.ssh/config management
     handler.rs     Per-session protocol handling (shell/exec/pty/data/...)
 
 tests/
   cli.rs                     Hermetic black-box CLI tests (no container runtime needed)
-  distrobox_integration.rs   Opt-in (#[ignore]) tests against a real Distrobox install
+  distrobox_integration.rs   Real container integration suite (up, stop, rm, init_hooks, RAII BoxGuard)
 ```
 
 ---
@@ -107,12 +107,24 @@ Because of this split, **any engine works on any host for free**. Adding a Docke
 Compose backend wouldn't touch `host/` at all; adding a new platform wouldn't touch
 `engine/` at all.
 
-### `HostTransport`: one required method, four free ones
+### Compile-Time Target Specialization (Zero Dead-Code Warnings)
 
-Every platform adapter used to duplicate `run`/`capture`/`spawn_piped` almost
-verbatim, with only the concrete command differing. That's now collapsed: the trait
-has exactly **one** thing each platform must define, and everything else is a default
-method built on top of it.
+Rust compiles ahead-of-time (AOT) to native machine code for the target architecture (`rustc --target`). A Windows executable (`dbx.exe`) is compiled specifically for Windows; a Linux binary is compiled specifically for Linux.
+
+Because of this, `host/mod.rs` uses compile-time target gating (`#[cfg(target_os = "...")]`):
+- When building on Windows, **only** `host/windows.rs` and `host/scratchpad.rs` are compiled into the binary.
+- When building on Linux, **only** `host/linux.rs` is compiled into the binary.
+- When building on macOS, **only** `host/macos.rs` is compiled into the binary.
+
+This provides two critical advantages:
+1. **Zero dead code warnings**: Unused platform adapters are never compiled into another OS's binary, completely eliminating the need for `#[allow(dead_code)]` hacks across the codebase.
+2. **Zero runtime OS guessing**: `host::current()` statically binds the platform transport at compile time rather than probing the OS at runtime.
+
+### `HostTransport`: one required method, default execution & scratchpad hooks
+
+Every platform adapter defines **one** required method (`command_parts`), and all execution helpers (`run`, `capture`, `spawn_piped`, `spawn_pty`) are default methods implemented on top of it.
+
+Furthermore, filesystem scratchpad synchronization is encapsulated as polymorphic hooks directly on `HostTransport`:
 
 ```mermaid
 flowchart TD
@@ -121,18 +133,22 @@ flowchart TD
     Capture["capture\ntrims stdout, for tool-existence checks"]
     SpawnPiped["spawn_piped\nplain OS pipes, non-interactive SSH sessions"]
     SpawnPty["spawn_pty\nreal pseudo-terminal, interactive SSH sessions"]
+    Scratch["sync_to_scratchpad / sync_from_scratchpad\nscratchpad_work_dir / clean_scratchpad\ndefaults to no-op on Linux, active on Windows"]
     CP --> Run
     CP --> Capture
     CP --> SpawnPiped
     CP --> SpawnPty
+    CP --> Scratch
 ```
 
-| Platform | `command_parts("distrobox list")` returns |
-|---|---|
-| Linux (native) | `("sh", ["-c", "distrobox list"])` |
-| Windows (WSL2) | `("wsl.exe", ["-e", "sh", "-c", "distrobox list"])` |
-| macOS (Podman Machine) | `("podman", ["machine", "ssh", "distrobox list"])` |
-| macOS (Lima) | `("limactl", ["shell", "default", "sh", "-c", "distrobox list"])` |
+| Platform | `command_parts("distrobox list")` returns | Scratchpad Sync Behavior |
+|---|---|---|
+| Linux (native) | `("sh", ["-c", "distrobox list"])` | **No-op** (Host ext4 is already native container storage; zero sync overhead) |
+| Windows (WSL2) | `("wsl.exe", ["-e", "sh", "-c", "distrobox list"])` | **Active** (Rsyncs between Windows NTFS `/mnt/c` and native WSL2 ext4 `/tmp/dbx/scratchpads`) |
+| macOS (Podman Machine) | `("podman", ["machine", "ssh", "distrobox list"])` | Future VM shared-folder bridge |
+| macOS (Lima) | `("limactl", ["shell", "default", "sh", "-c", "distrobox list"])` | Future VM shared-folder bridge |
+
+Because scratchpad operations are default no-op methods on `HostTransport`, **`src/main.rs` contains zero `cfg!(target_os = "windows")` checks**. The application commands simply call `ctx.host.sync_to_scratchpad(&cwd, &box_name)` without needing to know which OS they are running on.
 
 `macos.rs` is the one adapter that's an `enum` instead of a unit struct, because it's
 the only platform that has to pick *between* two backends at runtime
@@ -272,7 +288,7 @@ path, exactly like talking to a real `sshd`.
    come for free from the default methods in `host/mod.rs`. Only override them if your
    platform genuinely can't support one (e.g. no pty concept at all).
 
-2. Register it in `host::detect()` behind the right `#[cfg(target_os = "...")]`.
+2. Register it in `host::current()` behind the right `#[cfg(target_os = "...")]`.
 3. Add a unit test for `command_parts` (see `host/linux.rs`'s neighbors for the
    pattern) and, if the platform is available in CI, let `tests/cli.rs` exercise it
    for free (those tests are already platform-agnostic).
@@ -300,15 +316,22 @@ path, exactly like talking to a real `sshd`.
 
 | Layer | Where | What it covers | Needs a container runtime? |
 |---|---|---|---|
-| Unit tests | `#[cfg(test)]` modules next to the code (`config/mod.rs`, `util.rs`, `engine/distrobox.rs`, `sshd/mod.rs`, `host/pty.rs`) | Pure logic: INI merging, shell quoting, SSH-config block insert/remove, pty size clamping | No |
+| Unit tests | `#[cfg(test)]` modules next to the code (`config/mod.rs`, `util.rs`, `engine/distrobox.rs`, `sshd/mod.rs`, `host/pty.rs`, `host/linux.rs`) | Pure logic: INI merging, shell quoting, SSH-config block insert/remove, pty size clamping, host command formatting | No |
 | CLI black-box tests | `tests/cli.rs` | `dbx config`, `dbx up --dry-run`, argument validation -- spawns the real binary, never touches Distrobox | No |
-| Integration tests | `tests/distrobox_integration.rs` (`#[ignore]`d by default) | Real `up`/`list`/`rm` round-trip, including the `~/.ssh/*` side effects | Yes |
+| Real End-to-End Integration tests | `tests/distrobox_integration.rs` (`#[ignore]`d by default) | Full container lifecycle (`up`, `stop`, `rm`), `init_hooks` execution, `~/.ssh/dbx_config` management | Yes |
 
-Run everything hermetic with `cargo test`. Run the real thing with
-`cargo test --test distrobox_integration -- --ignored --test-threads=1` once
-Distrobox + Podman/Docker (or WSL2/Podman Machine/Lima) are installed. CI's
-`integration` job (`.github/workflows/ci.yml`) does exactly that on a dedicated
-Ubuntu runner, separately from the platform matrix that gates merges.
+### Integration Suite Design (`tests/distrobox_integration.rs`)
+- **`up_then_rm_round_trip`**: Assembles a real container, verifies `dbx list` detects it, confirms `~/.ssh/dbx_config` has the managed `Host` block, then tests clean removal.
+- **`stop_and_cleanup_round_trip`**: Verifies container shutdown with `dbx stop` followed by teardown.
+- **`custom_config_assembly_round_trip`**: Validates assembly with custom `init_hooks` executed inside Distrobox.
+- **`list_succeeds_when_distrobox_is_installed`**: Smoke tests query commands against live Distrobox.
+- **`BoxGuard` RAII Pattern**: Every test creates a `BoxGuard` holding the box name and directory. Its `Drop` implementation guarantees `dbx rm --force` and directory cleanup execute even if an assertion panics, preventing orphaned containers on the host.
+
+Run hermetic tests with `cargo test`. Run the real E2E integration suite with:
+```sh
+cargo test --test distrobox_integration -- --ignored --test-threads=1
+```
+In CI, `.github/workflows/ci.yml`'s `integration` job provisions Podman and Distrobox on Ubuntu and enforces these integration tests as a required merge gate.
 
 ---
 

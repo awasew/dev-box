@@ -3,13 +3,11 @@ use anyhow::{bail, Result};
 
 /// macOS can't run Linux containers natively, so dbx bridges into a
 /// lightweight Linux VM: Podman Machine (preferred) or Lima as a fallback.
-#[allow(dead_code)]
 pub enum MacHost {
     PodmanMachine,
     Lima,
 }
 
-#[allow(dead_code)]
 impl MacHost {
     pub fn detect() -> Self {
         if which::which("podman").is_ok() {

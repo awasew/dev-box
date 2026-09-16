@@ -58,12 +58,10 @@ fn main() -> Result<()> {
                 .map_err(|e| e.context("failed to assemble the dbx environment"))?;
 
             let use_scratchpad = scratchpad || config::is_scratchpad_enabled(&ctx.config);
-            if use_scratchpad && cfg!(target_os = "windows") {
+            if use_scratchpad {
                 match std::env::current_dir() {
                     Ok(cwd) => {
-                        if let Err(e) =
-                            host::scratchpad::sync_to_scratchpad(ctx.host.as_ref(), &cwd, &box_name)
-                        {
+                        if let Err(e) = ctx.host.sync_to_scratchpad(&cwd, &box_name) {
                             eprintln!("==> warning: scratchpad sync failed: {e:#}");
                         }
                     }
@@ -92,22 +90,20 @@ fn main() -> Result<()> {
             let forwarded_env = ctx.forwarded_env();
             let use_scratchpad = scratchpad || config::is_scratchpad_enabled(&ctx.config);
 
-            if use_scratchpad && cfg!(target_os = "windows") {
+            if use_scratchpad {
                 let cwd = std::env::current_dir()?;
-                host::scratchpad::sync_to_scratchpad(ctx.host.as_ref(), &cwd, &box_name)?;
-                let work_dir = host::scratchpad::scratchpad_path(&box_name);
+                ctx.host.sync_to_scratchpad(&cwd, &box_name)?;
+                let work_dir = ctx.host.scratchpad_work_dir(&box_name);
 
                 let enter_res = ctx.engine.enter(
                     ctx.host.as_ref(),
                     &box_name,
                     &forwarded_env,
-                    Some(&work_dir),
+                    work_dir.as_deref(),
                 );
 
-                // On session exit, sync modified source files back to Windows host.
-                if let Err(e) =
-                    host::scratchpad::sync_from_scratchpad(ctx.host.as_ref(), &cwd, &box_name)
-                {
+                // On session exit, sync modified source files back to host.
+                if let Err(e) = ctx.host.sync_from_scratchpad(&cwd, &box_name) {
                     eprintln!("==> warning: failed to sync changes back from scratchpad: {e:#}");
                 }
                 enter_res?;
@@ -126,9 +122,9 @@ fn main() -> Result<()> {
             };
             let cwd = std::env::current_dir()?;
             if reverse {
-                host::scratchpad::sync_from_scratchpad(ctx.host.as_ref(), &cwd, &box_name)?;
+                ctx.host.sync_from_scratchpad(&cwd, &box_name)?;
             } else {
-                host::scratchpad::sync_to_scratchpad(ctx.host.as_ref(), &cwd, &box_name)?;
+                ctx.host.sync_to_scratchpad(&cwd, &box_name)?;
             }
         }
 
@@ -165,19 +161,18 @@ fn main() -> Result<()> {
             if let Err(e) = sshd::remove_client_config(&box_name) {
                 eprintln!("==> warning: failed to remove SSH client config for {box_name}: {e:#}");
             }
-            if let Err(e) = host::scratchpad::clean_scratchpad(ctx.host.as_ref(), &box_name) {
+            if let Err(e) = ctx.host.clean_scratchpad(&box_name) {
                 eprintln!("==> warning: failed to clean scratchpad for {box_name}: {e:#}");
             }
         }
 
         Command::SshProxy { name } => {
             let forwarded_env = ctx.forwarded_env();
-            let work_dir =
-                if config::is_scratchpad_enabled(&ctx.config) && cfg!(target_os = "windows") {
-                    Some(host::scratchpad::scratchpad_path(&name))
-                } else {
-                    None
-                };
+            let work_dir = if config::is_scratchpad_enabled(&ctx.config) {
+                ctx.host.scratchpad_work_dir(&name)
+            } else {
+                None
+            };
             sshd::run(
                 Arc::clone(&ctx.host),
                 name,

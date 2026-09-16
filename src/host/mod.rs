@@ -20,15 +20,24 @@
 //! do I run a script and stream its output" -- just describing the one
 //! command that does it.
 
-pub mod linux;
-pub mod macos;
+#[cfg(target_os = "linux")]
+mod linux;
+
+#[cfg(target_os = "macos")]
+mod macos;
+
+#[cfg(target_os = "windows")]
+mod windows;
+
 pub mod pty;
+#[cfg(target_os = "windows")]
 pub mod scratchpad;
-pub mod windows;
 
 use anyhow::{Context, Result};
 use std::io::Write;
+use std::path::Path;
 use std::process::{Command, ExitStatus, Stdio};
+use std::sync::Arc;
 
 /// Abstracts *how* dbx reaches the Linux layer that actually runs
 /// distrobox: natively on Linux, via WSL2 on Windows, and via Podman
@@ -89,21 +98,45 @@ pub trait HostTransport: Send + Sync {
         let (program, args) = self.command_parts(script)?;
         pty::spawn(&program, &args, size)
     }
+
+    /// Syncs project files to a local scratchpad (e.g. WSL2 ext4) for fast I/O.
+    /// Defaults to a no-op on native platforms (e.g. Linux).
+    fn sync_to_scratchpad(&self, _host_dir: &Path, _box_name: &str) -> Result<()> {
+        Ok(())
+    }
+
+    /// Syncs modified project files back from scratchpad.
+    /// Defaults to a no-op on native platforms (e.g. Linux).
+    fn sync_from_scratchpad(&self, _host_dir: &Path, _box_name: &str) -> Result<()> {
+        Ok(())
+    }
+
+    /// Working directory override when scratchpad is active.
+    /// Defaults to `None` on native platforms.
+    fn scratchpad_work_dir(&self, _box_name: &str) -> Option<String> {
+        None
+    }
+
+    /// Cleans up any scratchpad storage on `dbx rm`.
+    /// Defaults to a no-op on native platforms.
+    fn clean_scratchpad(&self, _box_name: &str) -> Result<()> {
+        Ok(())
+    }
 }
 
-/// Detects the current platform and returns the appropriate transport.
-pub fn detect() -> Box<dyn HostTransport> {
+/// Returns the statically-compiled host transport for the target platform.
+pub fn current() -> Arc<dyn HostTransport> {
     #[cfg(target_os = "linux")]
     {
-        Box::new(linux::LinuxHost)
+        Arc::new(linux::LinuxHost)
     }
     #[cfg(target_os = "windows")]
     {
-        Box::new(windows::WindowsHost)
+        Arc::new(windows::WindowsHost)
     }
     #[cfg(target_os = "macos")]
     {
-        Box::new(macos::MacHost::detect())
+        Arc::new(macos::MacHost::detect())
     }
     #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
     {

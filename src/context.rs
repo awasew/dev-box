@@ -22,8 +22,7 @@ impl AppContext {
     /// Merges `layers`, detects the host transport, and selects the engine.
     pub fn new(layers: &[PathBuf]) -> Result<Self> {
         let config = config::merge_layers(layers)?;
-        // Arc::from(Box<dyn T>) is stable since Rust 1.21.
-        let host: Arc<dyn HostTransport> = Arc::from(host::detect());
+        let host: Arc<dyn HostTransport> = host::current();
         let engine: Arc<dyn ContainerEngine> = Arc::new(DistroboxEngine);
         Ok(Self {
             config,
