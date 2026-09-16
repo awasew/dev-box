@@ -157,6 +157,54 @@ the platform, not an inconsistency in the design.
 
 ---
 
+## The Orchestrator vs. Executor Boundary: Rust & Bash
+
+A key architectural question in cross-platform container tooling is where to draw the boundary between compiled system code and shell execution. `dbx` maintains a strict division of responsibilities:
+
+* **Rust is the Orchestrator (The Brain)**: Handles configuration layering, argument parsing, OS-specific transport detection, keyless SSH protocol handling, pseudo-terminal allocation, and concurrency.
+* **Bash/POSIX Shell is the Executor (The Muscle)**: Handles container lifecycle commands inside the Linux environment.
+
+```mermaid
+flowchart LR
+    subgraph Rust["Rust (The Orchestrator)"]
+        CLI["CLI Parsing (clap)"]
+        Config["Config Merging (INI layers)"]
+        SSH["Embedded SSH Server & Keyless Config"]
+        PTY["PTY Allocation & Tokio Channels"]
+        Transports["Cross-Platform Bridge (WSL2 / VM / Native)"]
+    end
+
+    subgraph Boundary["The Contract (POSIX Shell Script String)"]
+        Script["'distrobox enter my-box -- sh -c ...'"]
+    end
+
+    subgraph Bash["Bash (The Linux Executor)"]
+        Distrobox["Distrobox Engine (upstream shell script)"]
+        Container["Container Namespaces & Cgroups (Podman / Docker)"]
+        GuestEnv["Environment Variables & Shell Session"]
+    end
+
+    Rust --> Boundary --> Bash
+```
+
+### Why Rust as the Orchestrator?
+1. **Single Self-Contained Binary**: Compiles into a single ~2MB static binary with zero external dependencies. On Windows, developers do not need `bash` or cygwin/MSYS installed on the host to run `dbx.exe`.
+2. **Type Safety & Robust Error Handling**: Config merges, command dispatching, and file lock operations benefit from Rust's static typing and `Result<T, E>` propagates errors cleanly.
+3. **Async Concurrency & Networking**: The embedded SSH server (`sshd/`) and PTY bridging (`portable_pty` onto Tokio channels) require multithreaded runtime management that shell scripts cannot provide safely.
+
+### Why Bash as the Linux Executor?
+1. **Distrobox is Upstream POSIX Shell**: The upstream `distrobox` project is an open-source POSIX shell script (`#!/bin/sh`), not a compiled binary. It relies on standard host shell tools.
+2. **Cross-VM Bridges Expect Shell Strings**: Hypervisors and remote executors (`wsl.exe -e`, `limactl shell`, `podman machine ssh`, OpenSSH `ProxyCommand`) transfer command lines across hypervisor boundaries as shell strings, not OS `argv` pointer arrays.
+3. **Shell Builtins & Compound Expressions**: Existence probes (`command -v distrobox`) rely on shell builtins. Compound commands (`cd /tmp/scratch && distrobox enter ...`) execute naturally in a shell without multiple process round-trips.
+
+### Why Bash Commands are Generated Dynamically in Rust
+Rather than storing external `.sh` script files on disk, `dbx` generates POSIX command strings dynamically in memory:
+- **Zero Asset Distribution**: No loose `.sh` files to package, locate, or install on the host.
+- **Safe Escaping**: Dynamic arguments (box names, environment variables, work directories) are sanitized through `shell_quote()`, preventing injection attacks or broken paths with spaces.
+- **Streaming Payloads**: Payloads (such as INI configs for `distrobox assemble create --file /dev/stdin`) are generated in memory and piped directly to the host process stdin without touching temporary disk files.
+
+---
+
 ## Configuration layering
 
 `devbox.ini` is deliberately INI, not YAML/TOML/JSON, because it merges predictably
